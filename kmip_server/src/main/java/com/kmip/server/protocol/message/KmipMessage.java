@@ -1,12 +1,12 @@
 package com.kmip.server.protocol.message;
 
 import java.util.LinkedHashMap;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.List;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Optional;
-import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -16,9 +16,36 @@ public class KmipMessage {
     private static final Logger log = LoggerFactory.getLogger(KmipMessage.class);
     // Use Integer as key for tags
     private Map<Integer, List<Object>> fields;
+    // Store metadata about the message
+    private Map<String, String> metaInfo;
 
     public KmipMessage() {
         this.fields = new LinkedHashMap<>();
+        this.metaInfo = new HashMap<>();
+    }
+
+    /**
+     * Adds metadata information to the message.
+     * This is useful for storing information that is not part of the KMIP message structure
+     * but is needed for processing (e.g., message type, client information).
+     *
+     * @param key The metadata key
+     * @param value The metadata value
+     */
+    public void addMetaInfo(String key, String value) {
+        if (key != null && value != null) {
+            this.metaInfo.put(key, value);
+        }
+    }
+
+    /**
+     * Gets metadata information from the message.
+     *
+     * @param key The metadata key
+     * @return The metadata value, or null if not found
+     */
+    public String getMetaInfo(String key) {
+        return this.metaInfo.get(key);
     }
 
     /**
@@ -27,18 +54,18 @@ public class KmipMessage {
      */
     public void addField(int tag, Object value) {
         // Debug logging for field addition
-        log.debug("Adding field - Tag: 0x{}, Value: {}, Value Type: {}", 
+        log.debug("Adding field - Tag: 0x{}, Value: {}, Value Type: {}",
             Integer.toHexString(tag), value, value != null ? value.getClass().getSimpleName() : "null");
-        
+
         // Ensure value is not null before adding
         if (value == null) {
              log.warn("Tried to add null value for tag: 0x{} ({})", Integer.toHexString(tag), KmipTagResolver.getTagName(tag));
              return; // Don't store nulls
         }
-        
+
         // Use integer tag as key
         this.fields.computeIfAbsent(tag, k -> new ArrayList<>()).add(value);
-        log.debug("Field added successfully - Tag: 0x{}, Total fields for tag: {}", 
+        log.debug("Field added successfully - Tag: 0x{}, Total fields for tag: {}",
             Integer.toHexString(tag), this.fields.get(tag).size());
     }
 
@@ -50,7 +77,7 @@ public class KmipMessage {
         List<Object> values = fields.get(tag);
         return (values != null && !values.isEmpty()) ? values.get(0) : null;
     }
-    
+
     /**
      * Gets all values associated with a given integer tag.
      * Returns an empty list if the tag is not present.
@@ -67,9 +94,9 @@ public class KmipMessage {
     public Map<Integer, List<Object>> getFields() {
         return fields;
     }
-    
+
     /**
-     * Gets the first field value found within this message structure, 
+     * Gets the first field value found within this message structure,
      * attempting to cast it to the expected type.
      * Useful for KMIP structures that wrap a single value (like Attribute Value).
      *
@@ -88,8 +115,8 @@ public class KmipMessage {
                  return Optional.of(expectedType.cast(rawValue));
              } else {
                   System.err.printf("Warning: getFirstFieldValue expected %s but found %s for tag 0x%X (%s)%n",
-                                      expectedType.getSimpleName(), 
-                                      rawValue.getClass().getSimpleName(), 
+                                      expectedType.getSimpleName(),
+                                      rawValue.getClass().getSimpleName(),
                                       firstEntry.getKey(), // Key is now Integer
                                       KmipTagResolver.getTagName(firstEntry.getKey())); // Get name for log
              }

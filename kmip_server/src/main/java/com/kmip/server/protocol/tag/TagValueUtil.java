@@ -11,6 +11,7 @@ public class TagValueUtil {
 
     // Define KMIP Tag constants (add more as needed)
     public static final String TAG_REQUEST_MESSAGE = "420078";
+    public static final String TAG_RESPONSE_MESSAGE = "42007B";
     public static final String TAG_REQUEST_HEADER = "420077";
     public static final String TAG_BATCH_ITEM = "42000F";
     public static final String TAG_OPERATION = "42005C";
