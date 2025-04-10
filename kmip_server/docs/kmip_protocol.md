@@ -96,7 +96,7 @@ KMIP messages are encoded using a Tag, Type, Length, Value (TTLV) format:
 ```
 ┌───────────┬──────┬────────┬───────────────────┬─────────┐
 │    Tag    │ Type │ Length │       Value       │ Padding │
-│  (4 bytes)│(1 B) │(4 bytes)│  (Length bytes)   │(0-7 B)  │
+│  (3 bytes)│(1 B) │(4 bytes)│  (Length bytes)   │(0-7 B)  │
 └───────────┴──────┴────────┴───────────────────┴─────────┘
 ```
 

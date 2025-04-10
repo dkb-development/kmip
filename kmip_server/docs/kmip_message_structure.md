@@ -4,7 +4,7 @@
 
 KMIP uses a Tag, Type, Length, Value (TTLV) encoding for all messages. Each TTLV item consists of:
 
-- **Tag** (4 bytes): Identifies the field
+- **Tag** (3 bytes): Identifies the field
 - **Type** (1 byte): Indicates the data type
 - **Length** (4 bytes): Specifies the length of the value in bytes
 - **Value** (variable): The actual data
@@ -13,7 +13,7 @@ KMIP uses a Tag, Type, Length, Value (TTLV) encoding for all messages. Each TTLV
 ```
 ┌───────────┬──────┬────────┬───────────────────┬─────────┐
 │    Tag    │ Type │ Length │       Value       │ Padding │
-│  (4 bytes)│(1 B) │(4 bytes)│  (Length bytes)   │(0-7 B)  │
+│  (3 bytes)│(1 B) │(4 bytes)│  (Length bytes)   │(0-7 B)  │
 └───────────┴──────┴────────┴───────────────────┴─────────┘
 ```
 
