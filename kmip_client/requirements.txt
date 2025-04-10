@@ -1,0 +1,2 @@
+pykmip==0.10.0
+typing-extensions>=4.5.0  # Required for Python 3.11.6 compatibility 
