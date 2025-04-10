@@ -1,34 +1,19 @@
 package com.kmip.server.protocol.codec;
 
+import org.springframework.stereotype.Component;
+import java.nio.ByteBuffer;
+import java.util.Arrays;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
 import com.kmip.server.protocol.message.KmipMessage;
 import com.kmip.server.protocol.tag.KmipTagResolver;
-import lombok.extern.slf4j.Slf4j;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.springframework.stereotype.Component;
+import com.kmip.server.protocol.tag.TagValueUtil;
 
-import java.io.ByteArrayInputStream;
-import java.io.DataInputStream;
-import java.io.IOException;
-import java.nio.ByteBuffer;
-import java.nio.charset.StandardCharsets;
-import java.time.Instant;
-import java.util.Arrays;
-
-/**
- * Parser for KMIP messages.
- *
- * This class is responsible for parsing KMIP messages from the TTLV (Tag, Type, Length, Value)
- * format as specified in the KMIP protocol specification.
- *
- * The parser is stateless and thread-safe.
- */
 @Component
 public class KmipParser {
 
-    private static final Logger log = LoggerFactory.getLogger(KmipParser.class);
-
-    // TTLV Type constants
+    // KMIP TTLV Type constants (add more as needed)
     private static final byte TYPE_STRUCTURE = 0x01;
     private static final byte TYPE_INTEGER = 0x02;
     private static final byte TYPE_LONG_INTEGER = 0x03;
@@ -41,137 +26,139 @@ public class KmipParser {
     private static final byte TYPE_INTERVAL = 0x0A;
 
     /**
-     * Parses a KMIP message from a byte array.
-     *
-     * @param data The byte array containing the KMIP message
-     * @return The parsed KMIP message
-     * @throws IOException If an error occurs during parsing
+     * Parses the top-level KMIP Request Message.
      */
-    public KmipMessage parse(byte[] data) throws IOException {
-        ByteArrayInputStream bais = new ByteArrayInputStream(data);
-        DataInputStream dis = new DataInputStream(bais);
+    public KmipMessage parse(byte[] data, int length) throws KmipParseException {
+        ByteBuffer buffer = ByteBuffer.wrap(data, 0, length);
 
-        // Parse the message
-        KmipMessage message = parseMessage(dis);
-
-        // Check if there's any data left
-        if (bais.available() > 0) {
-            log.warn("Extra data found after parsing KMIP message: {} bytes", bais.available());
+        if (buffer.remaining() <= 7) {
+             throw new KmipParseException("Insufficient data for KMIP message header.");
         }
 
-        return message;
+        // Read the top-level Tag, Type, Length
+        byte[] tagBytes = new byte[3];
+        buffer.get(tagBytes);
+        String tag = bytesToHex(tagBytes);
+        byte type = buffer.get();
+        int valueLength = buffer.getInt();
+
+        // Validate top-level structure
+        if (!TagValueUtil.TAG_REQUEST_MESSAGE.equals(tag) || type != TYPE_STRUCTURE) {
+            throw new KmipParseException("Expected Request Message Structure (Tag 420078, Type 01) at top level, found Tag " + tag + ", Type " + type);
+        }
+        
+        if (valueLength > buffer.remaining()) {
+            throw new KmipParseException("Insufficient data for Request Message value. Declared length: " + valueLength + ", Remaining bytes: " + buffer.remaining());
+        }
+        
+        // Create a slice for the *value* of the Request Message structure
+        ByteBuffer messageContentBuffer = buffer.slice();
+        messageContentBuffer.limit(valueLength);
+
+        // Parse the *contents* of the Request Message structure
+        // This should contain the Request Header and Batch Item(s)
+        KmipMessage messageContent = parseStructure(messageContentBuffer);
+
+        // Optional: Add top-level tag info if needed elsewhere, 
+        // but messageContent is what the handler needs.
+        // messageContent.addMetaInfo("topLevelTag", tag);
+
+        return messageContent; 
     }
 
-    private KmipMessage parseMessage(DataInputStream dis) throws IOException {
-        // Read the tag
-        int tag = dis.readInt();
-        log.debug("Parsing message with tag: 0x{}", Integer.toHexString(tag));
+    /**
+     * Parses a KMIP Structure recursively.
+     */
+    private KmipMessage parseStructure(ByteBuffer buffer) throws KmipParseException {
+        KmipMessage structure = new KmipMessage();
+        while (buffer.hasRemaining() && buffer.remaining() > 7) {
+            byte[] tagBytes = new byte[3];
+            buffer.get(tagBytes);
+            String tagString = bytesToHex(tagBytes);
+            byte type = buffer.get();
+            int valueLength = buffer.getInt();
+            
+            if (buffer.remaining() < valueLength) {
+                 throw new KmipParseException("Insufficient data for value of tag " + tagString + ". Required: " + valueLength + ", Available: " + buffer.remaining());
+            }
 
-        // Read the type
-        byte type = dis.readByte();
+            ByteBuffer valueBuffer = buffer.slice();
+            valueBuffer.limit(valueLength);
 
-        // Read the length
-        int length = dis.readInt();
-        log.debug("Message type: 0x{}, length: {}", Integer.toHexString(type), length);
+            Object value = parseValue(type, valueBuffer);
+            if (value != null) { // Don't add field if value parsing failed
+                 int tagInt = KmipTagResolver.getTagValue(tagString);
+                 structure.addField(tagInt, value);
+             }
 
-        // For structures, parse the structure
-        if (type == TYPE_STRUCTURE) {
-            return parseStructure(dis, tag, length);
-        } else {
-            // Skip this field, we're only interested in the top-level structure
-            skipValue(dis, length);
-            return new KmipMessage();
+            buffer.position(buffer.position() + valueLength);
+            int padding = (8 - (valueLength % 8)) % 8;
+            if (buffer.remaining() >= padding) {
+                // Validate padding bytes are zero
+                for (int i = 0; i < padding; i++) {
+                    byte padByte = buffer.get();
+                    if (padByte != 0) {
+                        throw new KmipParseException("Invalid padding byte at position " + i + " for tag " + tagString + ". Expected 0, got " + padByte);
+                    }
+                }
+            } else if (padding > 0) {
+                throw new KmipParseException("Insufficient data for padding after tag " + tagString);
+            }
         }
+        return structure;
     }
 
-    private KmipMessage parseStructure(DataInputStream dis, int tag, int length) throws IOException {
-        KmipMessage message = new KmipMessage();
-
-        // Read the structure content
-        byte[] content = new byte[length];
-        dis.readFully(content);
-
-        // Skip padding
-        int padding = (8 - (length % 8)) % 8;
-        if (padding > 0) {
-            dis.skipBytes(padding);
+    /**
+     * Parses a single value based on its type.
+     */
+    private Object parseValue(byte type, ByteBuffer valueBuffer) throws KmipParseException {
+        if (!valueBuffer.hasRemaining() && type != TYPE_STRUCTURE) { // Allow empty structures
+             // Minor types like Integer, Enum, Boolean etc shouldn't have zero length according to spec
+             System.err.println("Warning: Zero-length value encountered for non-structure type: " + String.format("0x%02X", type));
+             // Depending on strictness, could throw exception or return null/default.
+             // Let's return null for now to avoid adding empty fields.
+             return null; 
         }
-
-        // Parse the structure content
-        ByteArrayInputStream bais = new ByteArrayInputStream(content);
-        DataInputStream contentDis = new DataInputStream(bais);
-
-        // Parse all fields in the structure
-        while (bais.available() > 0) {
-            parseField(contentDis, message);
-        }
-
-        return message;
-    }
-
-    private void parseField(DataInputStream dis, KmipMessage message) throws IOException {
-        // Read the tag
-        int tag = dis.readInt();
-
-        // Read the type
-        byte type = dis.readByte();
-
-        // Read the length
-        int length = dis.readInt();
-
-        log.debug("Parsing field - Tag: 0x{}, Type: 0x{}, Length: {}",
-            Integer.toHexString(tag), Integer.toHexString(type), length);
-
-        // Parse the value based on the type
-        Object value = parseValue(dis, type, length);
-
-        // Add the field to the message
-        message.addField(tag, value);
-
-        // Skip padding
-        int padding = (8 - (length % 8)) % 8;
-        if (padding > 0) {
-            dis.skipBytes(padding);
-        }
-    }
-
-    private Object parseValue(DataInputStream dis, byte type, int length) throws IOException {
+        
         switch (type) {
             case TYPE_STRUCTURE:
-                return parseStructure(dis, 0, length);
+                return parseStructure(valueBuffer);
             case TYPE_INTEGER:
-                return dis.readInt();
-            case TYPE_LONG_INTEGER:
-                return dis.readLong();
+                if (valueBuffer.remaining() >= 4) return valueBuffer.getInt();
+                else throw new KmipParseException("Insufficient data for INTEGER: " + valueBuffer.remaining());
             case TYPE_ENUMERATION:
-                return dis.readInt();
+                 if (valueBuffer.remaining() >= 4) return valueBuffer.getInt();
+                 else throw new KmipParseException("Insufficient data for ENUMERATION: " + valueBuffer.remaining());
             case TYPE_BOOLEAN:
-                return dis.readLong() != 0;
+                if (valueBuffer.remaining() >= 8) {
+                    byte[] booleanBytes = new byte[8]; valueBuffer.get(booleanBytes);
+                    return (booleanBytes[7] & 0x01) != 0;
+                } else throw new KmipParseException("Insufficient data for BOOLEAN: " + valueBuffer.remaining());
             case TYPE_TEXT_STRING:
-                byte[] textBytes = new byte[length];
-                dis.readFully(textBytes);
-                return new String(textBytes, StandardCharsets.UTF_8);
+                byte[] stringBytes = new byte[valueBuffer.remaining()]; valueBuffer.get(stringBytes);
+                return new String(stringBytes); 
             case TYPE_BYTE_STRING:
-                byte[] bytes = new byte[length];
-                dis.readFully(bytes);
-                return bytes;
-            case TYPE_DATE_TIME:
-                long seconds = dis.readLong();
-                return Instant.ofEpochSecond(seconds);
+                 byte[] byteStringBytes = new byte[valueBuffer.remaining()]; valueBuffer.get(byteStringBytes);
+                return byteStringBytes;
             default:
-                // Skip unknown types
-                skipValue(dis, length);
-                return null;
+                 System.err.println("Warning: Unhandled KMIP type: " + String.format("0x%02X", type) + ". Returning raw bytes.");
+                byte[] rawBytes = new byte[valueBuffer.remaining()]; valueBuffer.get(rawBytes);
+                return rawBytes;
         }
     }
 
-    private void skipValue(DataInputStream dis, int length) throws IOException {
-        dis.skipBytes(length);
+    private String bytesToHex(byte[] bytes) {
+        StringBuilder hexString = new StringBuilder();
+        for (byte b : bytes) {
+            hexString.append(String.format("%02X", b));
+        }
+        return hexString.toString(); // No trim or space needed for internal tag representation
+    }
 
-        // Skip padding
-        int padding = (8 - (length % 8)) % 8;
-        if (padding > 0) {
-            dis.skipBytes(padding);
+    // Custom exception for parsing errors
+    public static class KmipParseException extends Exception {
+        public KmipParseException(String message) {
+            super(message);
         }
     }
 }

@@ -1,72 +1,39 @@
 package com.kmip.server.core.exception;
 
-import com.kmip.server.protocol.tag.TagValueUtil;
+// Import the ResultReason enum defined in KmipRequestHandler
+import com.kmip.server.operation.KmipRequestHandler.ResultReason;
 
-/**
- * Exception thrown when a KMIP operation fails.
- */
-public class KmipException extends RuntimeException {
-    private final int resultReason;
+public class KmipException extends Exception {
 
-    /**
-     * Creates a new KmipException with the specified message.
-     *
-     * @param message The error message
-     */
+    private final ResultReason resultReason;
+
+    // Constructors
     public KmipException(String message) {
         super(message);
-        this.resultReason = 0; // Default reason
+        this.resultReason = null; // Default if no reason specified
     }
 
-    /**
-     * Creates a new KmipException with the specified message and result reason.
-     *
-     * @param message The error message
-     * @param resultReason The result reason code
-     */
-    public KmipException(String message, int resultReason) {
+    public KmipException(String message, ResultReason reason) {
         super(message);
-        this.resultReason = resultReason;
+        this.resultReason = reason;
     }
 
-    /**
-     * Creates a new KmipException with the specified message and cause.
-     *
-     * @param message The error message
-     * @param cause The cause of the exception
-     */
     public KmipException(String message, Throwable cause) {
         super(message, cause);
-        this.resultReason = 0; // Default reason
+        this.resultReason = null; // Default if no reason specified
     }
-
-    /**
-     * Creates a new KmipException with the specified message, cause, and result reason.
-     *
-     * @param message The error message
-     * @param cause The cause of the exception
-     * @param resultReason The result reason code
-     */
-    public KmipException(String message, Throwable cause, int resultReason) {
+    
+    public KmipException(String message, Throwable cause, ResultReason reason) {
         super(message, cause);
-        this.resultReason = resultReason;
+        this.resultReason = reason;
     }
 
     /**
-     * Gets the result reason code.
-     *
-     * @return The result reason code
+     * Gets the KMIP Result Reason associated with this exception, if any.
+     * 
+     * @return The ResultReason enum, or null if none was set.
      */
-    public int getResultReason() {
+    public ResultReason getResultReason() {
         return resultReason;
     }
-
-    /**
-     * Gets the result reason name.
-     *
-     * @return The result reason name
-     */
-    public String getResultReasonName() {
-        return TagValueUtil.getResultReasonName(resultReason);
-    }
-}
+} 

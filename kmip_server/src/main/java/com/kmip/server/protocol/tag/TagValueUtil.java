@@ -1,217 +1,191 @@
 package com.kmip.server.protocol.tag;
 
-/**
- * Utility class for working with KMIP tag values.
- * 
- * This class provides constants and utility methods for working with KMIP tag values.
- */
+import java.util.Optional;
+import java.util.List;
+import java.util.ArrayList;
+import java.util.stream.Collectors;
+
+import com.kmip.server.protocol.message.KmipMessage;
+
 public class TagValueUtil {
-    // Operation values
-    public static final int OPERATION_CREATE = 0x01;
-    public static final int OPERATION_GET = 0x0A;
-    public static final int OPERATION_DESTROY = 0x14;
-    
-    // Object Type values
-    public static final int OBJECT_TYPE_SYMMETRIC_KEY = 0x02;
-    public static final int OBJECT_TYPE_PUBLIC_KEY = 0x03;
-    public static final int OBJECT_TYPE_PRIVATE_KEY = 0x04;
-    public static final int OBJECT_TYPE_CERTIFICATE = 0x05;
-    
-    // Result Status values
-    public static final int RESULT_STATUS_SUCCESS = 0x00;
-    public static final int RESULT_STATUS_OPERATION_FAILED = 0x01;
-    public static final int RESULT_STATUS_OPERATION_PENDING = 0x02;
-    public static final int RESULT_STATUS_OPERATION_UNDONE = 0x03;
-    
-    // Result Reason values
-    public static final int RESULT_REASON_ITEM_NOT_FOUND = 0x01;
-    public static final int RESULT_REASON_RESPONSE_TOO_LARGE = 0x02;
-    public static final int RESULT_REASON_AUTHENTICATION_NOT_SUCCESSFUL = 0x03;
-    public static final int RESULT_REASON_INVALID_MESSAGE = 0x04;
-    public static final int RESULT_REASON_OPERATION_NOT_SUPPORTED = 0x05;
-    
-    // Key Format Type values
-    public static final int KEY_FORMAT_TYPE_RAW = 0x01;
-    public static final int KEY_FORMAT_TYPE_PKCS1 = 0x02;
-    public static final int KEY_FORMAT_TYPE_PKCS8 = 0x03;
-    
-    // Cryptographic Algorithm values
-    public static final int CRYPTO_ALGORITHM_DES = 0x01;
-    public static final int CRYPTO_ALGORITHM_3DES = 0x02;
-    public static final int CRYPTO_ALGORITHM_AES = 0x03;
-    public static final int CRYPTO_ALGORITHM_RSA = 0x04;
-    public static final int CRYPTO_ALGORITHM_DSA = 0x05;
-    public static final int CRYPTO_ALGORITHM_ECDSA = 0x06;
-    
-    // Cryptographic Usage Mask values
-    public static final int CRYPTO_USAGE_SIGN = 0x00000001;
-    public static final int CRYPTO_USAGE_VERIFY = 0x00000002;
-    public static final int CRYPTO_USAGE_ENCRYPT = 0x00000004;
-    public static final int CRYPTO_USAGE_DECRYPT = 0x00000008;
-    public static final int CRYPTO_USAGE_WRAP_KEY = 0x00000010;
-    public static final int CRYPTO_USAGE_UNWRAP_KEY = 0x00000020;
-    
+
+    // Define KMIP Tag constants (add more as needed)
+    public static final String TAG_REQUEST_MESSAGE = "420078";
+    public static final String TAG_REQUEST_HEADER = "420077";
+    public static final String TAG_BATCH_ITEM = "42000F";
+    public static final String TAG_OPERATION = "42005C";
+    public static final String TAG_REQUEST_PAYLOAD = "420079";
+    public static final String TAG_OBJECT_TYPE = "420057";
+    public static final String TAG_TEMPLATE_ATTRIBUTE = "420091";
+    public static final String TAG_ATTRIBUTE = "420008";
+    public static final String TAG_ATTRIBUTE_NAME = "42000A";
+    public static final String TAG_ATTRIBUTE_VALUE = "42000B";
+    public static final String TAG_CRYPTOGRAPHIC_ALGORITHM = "420028";
+    public static final String TAG_CRYPTOGRAPHIC_LENGTH = "42002A";
+    public static final String TAG_CRYPTOGRAPHIC_USAGE_MASK = "42002C";
+    public static final String TAG_UNIQUE_IDENTIFIER = "420094";
+    // Add other relevant tags...
+
     /**
-     * Gets the name of an operation.
+     * Safely retrieves a field from a KmipMessage as a specific type using integer tag.
      *
-     * @param operation The operation value
-     * @return The name of the operation, or "Unknown Operation" if the operation is not recognized
+     * @param message The KmipMessage to extract from.
+     * @param tag The INTEGER tag of the field to retrieve (from KmipTagResolver).
+     * @param expectedType The expected Class of the value.
+     * @return An Optional containing the value if found and of the correct type, otherwise empty.
      */
-    public static String getOperationName(int operation) {
-        switch (operation) {
-            case OPERATION_CREATE:
-                return "Create";
-            case OPERATION_GET:
-                return "Get";
-            case OPERATION_DESTROY:
-                return "Destroy";
-            default:
-                return "Unknown Operation (0x" + Integer.toHexString(operation) + ")";
+    public static <T> Optional<T> getFieldAs(KmipMessage message, int tag, Class<T> expectedType) {
+        if (message == null) {
+            System.err.println("DEBUG getFieldAs: Input message is null for tag 0x" + Integer.toHexString(tag));
+            return Optional.empty();
         }
-    }
-    
-    /**
-     * Gets the name of an object type.
-     *
-     * @param objectType The object type value
-     * @return The name of the object type, or "Unknown Object Type" if the object type is not recognized
-     */
-    public static String getObjectTypeName(int objectType) {
-        switch (objectType) {
-            case OBJECT_TYPE_SYMMETRIC_KEY:
-                return "Symmetric Key";
-            case OBJECT_TYPE_PUBLIC_KEY:
-                return "Public Key";
-            case OBJECT_TYPE_PRIVATE_KEY:
-                return "Private Key";
-            case OBJECT_TYPE_CERTIFICATE:
-                return "Certificate";
-            default:
-                return "Unknown Object Type (0x" + Integer.toHexString(objectType) + ")";
+        // Pass INT tag directly to KmipMessage.getField
+        Object value = message.getField(tag);
+        if (value == null) {
+            System.err.printf("DEBUG getFieldAs: Field with tag 0x%X ('%s') NOT FOUND in message.%n", tag, KmipTagResolver.getTagName(tag));
+            return Optional.empty();
         }
-    }
-    
-    /**
-     * Gets the name of a result status.
-     *
-     * @param resultStatus The result status value
-     * @return The name of the result status, or "Unknown Result Status" if the result status is not recognized
-     */
-    public static String getResultStatusName(int resultStatus) {
-        switch (resultStatus) {
-            case RESULT_STATUS_SUCCESS:
-                return "Success";
-            case RESULT_STATUS_OPERATION_FAILED:
-                return "Operation Failed";
-            case RESULT_STATUS_OPERATION_PENDING:
-                return "Operation Pending";
-            case RESULT_STATUS_OPERATION_UNDONE:
-                return "Operation Undone";
-            default:
-                return "Unknown Result Status (0x" + Integer.toHexString(resultStatus) + ")";
-        }
-    }
-    
-    /**
-     * Gets the name of a result reason.
-     *
-     * @param resultReason The result reason value
-     * @return The name of the result reason, or "Unknown Result Reason" if the result reason is not recognized
-     */
-    public static String getResultReasonName(int resultReason) {
-        switch (resultReason) {
-            case RESULT_REASON_ITEM_NOT_FOUND:
-                return "Item Not Found";
-            case RESULT_REASON_RESPONSE_TOO_LARGE:
-                return "Response Too Large";
-            case RESULT_REASON_AUTHENTICATION_NOT_SUCCESSFUL:
-                return "Authentication Not Successful";
-            case RESULT_REASON_INVALID_MESSAGE:
-                return "Invalid Message";
-            case RESULT_REASON_OPERATION_NOT_SUPPORTED:
-                return "Operation Not Supported";
-            default:
-                return "Unknown Result Reason (0x" + Integer.toHexString(resultReason) + ")";
-        }
-    }
-    
-    /**
-     * Gets the name of a key format type.
-     *
-     * @param keyFormatType The key format type value
-     * @return The name of the key format type, or "Unknown Key Format Type" if the key format type is not recognized
-     */
-    public static String getKeyFormatTypeName(int keyFormatType) {
-        switch (keyFormatType) {
-            case KEY_FORMAT_TYPE_RAW:
-                return "Raw";
-            case KEY_FORMAT_TYPE_PKCS1:
-                return "PKCS#1";
-            case KEY_FORMAT_TYPE_PKCS8:
-                return "PKCS#8";
-            default:
-                return "Unknown Key Format Type (0x" + Integer.toHexString(keyFormatType) + ")";
-        }
-    }
-    
-    /**
-     * Gets the name of a cryptographic algorithm.
-     *
-     * @param algorithm The cryptographic algorithm value
-     * @return The name of the cryptographic algorithm, or "Unknown Algorithm" if the algorithm is not recognized
-     */
-    public static String getCryptoAlgorithmName(int algorithm) {
-        switch (algorithm) {
-            case CRYPTO_ALGORITHM_DES:
-                return "DES";
-            case CRYPTO_ALGORITHM_3DES:
-                return "3DES";
-            case CRYPTO_ALGORITHM_AES:
-                return "AES";
-            case CRYPTO_ALGORITHM_RSA:
-                return "RSA";
-            case CRYPTO_ALGORITHM_DSA:
-                return "DSA";
-            case CRYPTO_ALGORITHM_ECDSA:
-                return "ECDSA";
-            default:
-                return "Unknown Algorithm (0x" + Integer.toHexString(algorithm) + ")";
-        }
-    }
-    
-    /**
-     * Gets a string representation of a cryptographic usage mask.
-     *
-     * @param usageMask The cryptographic usage mask value
-     * @return A string representation of the cryptographic usage mask
-     */
-    public static String getCryptoUsageMaskString(int usageMask) {
-        StringBuilder sb = new StringBuilder();
-        
-        if ((usageMask & CRYPTO_USAGE_SIGN) != 0) {
-            sb.append("Sign, ");
-        }
-        if ((usageMask & CRYPTO_USAGE_VERIFY) != 0) {
-            sb.append("Verify, ");
-        }
-        if ((usageMask & CRYPTO_USAGE_ENCRYPT) != 0) {
-            sb.append("Encrypt, ");
-        }
-        if ((usageMask & CRYPTO_USAGE_DECRYPT) != 0) {
-            sb.append("Decrypt, ");
-        }
-        if ((usageMask & CRYPTO_USAGE_WRAP_KEY) != 0) {
-            sb.append("Wrap Key, ");
-        }
-        if ((usageMask & CRYPTO_USAGE_UNWRAP_KEY) != 0) {
-            sb.append("Unwrap Key, ");
-        }
-        
-        if (sb.length() > 0) {
-            sb.setLength(sb.length() - 2); // Remove trailing comma and space
-            return sb.toString();
+
+        if (expectedType.isInstance(value)) {
+            return Optional.of(expectedType.cast(value));
         } else {
-            return "None";
+            System.err.printf("Warning: Field with tag 0x%X ('%s') has unexpected type %s (expected %s)%n",
+                tag, KmipTagResolver.getTagName(tag), value.getClass().getSimpleName(), expectedType.getSimpleName());
+            return Optional.empty();
         }
     }
+
+    /**
+     * Extracts the Operation code from a Batch Item.
+     */
+    public static Optional<Integer> getOperation(KmipMessage batchItem) {
+        return getFieldAs(batchItem, KmipTagResolver.TAG_OPERATION, Integer.class);
+    }
+
+    /**
+     * Extracts the Object Type from a Request Payload.
+     */
+    public static Optional<Integer> getObjectType(KmipMessage requestPayload) {
+        return getFieldAs(requestPayload, KmipTagResolver.TAG_OBJECT_TYPE, Integer.class);
+    }
+
+    /**
+     * Extracts the Request Header from a Request Message.
+     */
+    public static Optional<KmipMessage> getRequestHeader(KmipMessage requestMessage) {
+        return getFieldAs(requestMessage, KmipTagResolver.TAG_REQUEST_HEADER, KmipMessage.class);
+    }
+
+    /**
+     * Extracts the Protocol Version structure from a Request Header.
+     */
+    public static Optional<KmipMessage> getProtocolVersionStructure(KmipMessage requestHeader) {
+        return getFieldAs(requestHeader, KmipTagResolver.TAG_PROTOCOL_VERSION, KmipMessage.class);
+    }
+
+    /**
+     * Extracts the (first) Batch Item from a Request/Response Message.
+     * NOTE: Assumes only one batch item for simplicity now.
+     */
+    public static Optional<KmipMessage> getBatchItem(KmipMessage message) {
+        // Check for Request Batch Item first, then Response Batch Item
+        Optional<KmipMessage> reqBatchItem = getFieldAs(message, KmipTagResolver.TAG_REQUEST_BATCH_ITEM, KmipMessage.class);
+        if (reqBatchItem.isPresent()) {
+            return reqBatchItem;
+        }
+        return getFieldAs(message, KmipTagResolver.TAG_RESPONSE_BATCH_ITEM, KmipMessage.class);
+    }
+
+    /**
+     * Extracts the Request Payload from a Batch Item.
+     */
+    public static Optional<KmipMessage> getRequestPayload(KmipMessage batchItem) {
+        return getFieldAs(batchItem, KmipTagResolver.TAG_REQUEST_PAYLOAD, KmipMessage.class);
+    }
+
+    /**
+     * Extracts the Template-Attribute structure from a Request Payload.
+     */
+    public static Optional<KmipMessage> getTemplateAttributeStructure(KmipMessage requestPayload) {
+        return getFieldAs(requestPayload, KmipTagResolver.TAG_TEMPLATE_ATTRIBUTE, KmipMessage.class);
+    }
+
+    /**
+     * Finds a specific Attribute structure within a Template-Attribute structure
+     * by its Attribute Name TAG (e.g., KmipTagResolver.TAG_CRYPTOGRAPHIC_ALGORITHM).
+     *
+     * @param templateAttribute The Template-Attribute structure.
+     * @param attributeNameTag The INTEGER tag representing the name of the attribute to find.
+     * @return An Optional containing the Attribute structure if found.
+     */
+    public static Optional<KmipMessage> findAttributeByNameTag(KmipMessage templateAttribute, int attributeNameTag) {
+        if (templateAttribute == null) return Optional.empty();
+        String attributeName = KmipTagResolver.getTagName(attributeNameTag); // Still need name for comparison
+        int attributeStructureTag = KmipTagResolver.TAG_ATTRIBUTE;
+
+        // Get all Attribute structures using INT tag
+        List<Object> attributes = templateAttribute.getAllFields(attributeStructureTag);
+        for (Object attrObj : attributes) {
+            if (attrObj instanceof KmipMessage) {
+                KmipMessage attribute = (KmipMessage) attrObj;
+                // Get the Attribute Name field (TextString) using its INT tag
+                Optional<String> name = getFieldAs(attribute, KmipTagResolver.TAG_ATTRIBUTE_NAME, String.class);
+                if (name.isPresent() && name.get().equalsIgnoreCase(attributeName)) {
+                    return Optional.of(attribute);
+                }
+            }
+        }
+        return Optional.empty();
+    }
+
+    /**
+     * Gets the value part of a specific Attribute (retrieved via findAttributeByNameTag).
+     *
+     * @param attribute The Attribute structure.
+     * @param expectedValueType The expected Class of the attribute's value.
+     * @return An Optional containing the Attribute Value if found and of the correct type.
+     */
+    public static <T> Optional<T> getAttributeValue(KmipMessage attribute, Class<T> expectedValueType) {
+        // Use the INT tag for Attribute Value
+        return getFieldAs(attribute, KmipTagResolver.TAG_ATTRIBUTE_VALUE, expectedValueType);
+    }
+
+    /**
+     * Helper to get Cryptographic Algorithm enumeration value from a Template-Attribute.
+     */
+    public static Optional<Integer> getCryptographicAlgorithm(KmipMessage templateAttribute) {
+        return findAttributeByNameTag(templateAttribute, KmipTagResolver.TAG_CRYPTOGRAPHIC_ALGORITHM)
+                .flatMap(attr -> getAttributeValue(attr, Integer.class));
+    }
+
+    /**
+     * Helper to get Cryptographic Length integer value from a Template-Attribute.
+     */
+    public static Optional<Integer> getCryptographicLength(KmipMessage templateAttribute) {
+        return findAttributeByNameTag(templateAttribute, KmipTagResolver.TAG_CRYPTOGRAPHIC_LENGTH)
+                .flatMap(attr -> getAttributeValue(attr, Integer.class));
+    }
+
+    /**
+     * Helper to get Cryptographic Usage Mask integer value from a Template-Attribute.
+     */
+    public static Optional<Integer> getCryptographicUsageMask(KmipMessage templateAttribute) {
+        // Find the Attribute for Usage Mask
+        return findAttributeByNameTag(templateAttribute, KmipTagResolver.TAG_CRYPTOGRAPHIC_USAGE_MASK)
+                // Then get its value (which should be an Integer)
+                .flatMap(attr -> getAttributeValue(attr, Integer.class));
+    }
+
+    /**
+     * Extracts the Unique Identifier from a Request Payload.
+     * Used primarily for Get, Destroy, and other operations that reference an existing object.
+     *
+     * @param requestPayload The Request Payload structure.
+     * @return An Optional containing the Unique Identifier string if found.
+     */
+    public static Optional<String> getUniqueIdentifier(KmipMessage requestPayload) {
+        return getFieldAs(requestPayload, KmipTagResolver.TAG_UNIQUE_IDENTIFIER, String.class);
+    }
+
+    // Add more helper methods as needed (e.g., for getting other Attributes, etc.)
 }

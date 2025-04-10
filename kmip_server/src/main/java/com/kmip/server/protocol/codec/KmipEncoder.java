@@ -1,67 +1,60 @@
 package com.kmip.server.protocol.codec;
 
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.stereotype.Component;
+
 import com.kmip.server.protocol.message.KmipMessage;
 import com.kmip.server.protocol.tag.KmipTagResolver;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.springframework.stereotype.Component;
 
 import java.io.ByteArrayOutputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.time.ZonedDateTime;
 import java.util.List;
 import java.util.Map;
+import java.util.Arrays;
 
-/**
- * Encoder for KMIP messages.
- *
- * This class is responsible for encoding KMIP messages into the TTLV (Tag, Type, Length, Value)
- * format as specified in the KMIP protocol specification.
- *
- * The encoder is stateless and thread-safe.
- */
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+@Slf4j
 @Component
 public class KmipEncoder {
 
     private static final Logger log = LoggerFactory.getLogger(KmipEncoder.class);
 
-    // TTLV Type constants
-    public static final byte TYPE_STRUCTURE = 0x01;
-    public static final byte TYPE_INTEGER = 0x02;
-    public static final byte TYPE_LONG_INTEGER = 0x03;
-    public static final byte TYPE_BIG_INTEGER = 0x04;
-    public static final byte TYPE_ENUMERATION = 0x05;
-    public static final byte TYPE_BOOLEAN = 0x06;
-    public static final byte TYPE_TEXT_STRING = 0x07;
-    public static final byte TYPE_BYTE_STRING = 0x08;
-    public static final byte TYPE_DATE_TIME = 0x09;
-    public static final byte TYPE_INTERVAL = 0x0A;
+    // Constants mirroring KmipParser (or ideally defined centrally)
+    private static final byte TYPE_STRUCTURE = 0x01;
+    private static final byte TYPE_INTEGER = 0x02;
+    private static final byte TYPE_LONG_INTEGER = 0x03;
+    private static final byte TYPE_BIG_INTEGER = 0x04; // Assuming BigInteger maps to Long for simplicity now
+    private static final byte TYPE_ENUMERATION = 0x05;
+    private static final byte TYPE_BOOLEAN = 0x06;
+    private static final byte TYPE_TEXT_STRING = 0x07;
+    private static final byte TYPE_BYTE_STRING = 0x08;
+    private static final byte TYPE_DATE_TIME = 0x09;
+    private static final byte TYPE_INTERVAL = 0x0A; // Encoding Interval might need specific logic
 
-    // Common tag constants
-    public static final int TAG_PROTOCOL_VERSION = KmipTagResolver.TAG_PROTOCOL_VERSION;
-    public static final int TAG_PROTOCOL_VERSION_MAJOR = KmipTagResolver.TAG_PROTOCOL_VERSION_MAJOR;
-    public static final int TAG_PROTOCOL_VERSION_MINOR = KmipTagResolver.TAG_PROTOCOL_VERSION_MINOR;
-    public static final int TAG_OPERATION = KmipTagResolver.TAG_OPERATION;
-    public static final int TAG_RESULT_STATUS = KmipTagResolver.TAG_RESULT_STATUS;
-    public static final int TAG_RESULT_REASON = KmipTagResolver.TAG_RESULT_REASON;
-    public static final int TAG_RESULT_MESSAGE = KmipTagResolver.TAG_RESULT_MESSAGE;
-    public static final int TAG_BATCH_COUNT = KmipTagResolver.TAG_BATCH_COUNT;
-    public static final int TAG_BATCH_ITEM = KmipTagResolver.TAG_BATCH_ITEM;
-    public static final int TAG_RESPONSE_HEADER = KmipTagResolver.TAG_RESPONSE_HEADER;
-    public static final int TAG_REQUEST_HEADER = KmipTagResolver.TAG_REQUEST_HEADER;
+    // Tag constants (add more as needed, mirroring KmipTagResolver if used)
     public static final int TAG_RESPONSE_MESSAGE = KmipTagResolver.TAG_RESPONSE_MESSAGE;
-    public static final int TAG_REQUEST_MESSAGE = KmipTagResolver.TAG_REQUEST_MESSAGE;
-    public static final int TAG_RESPONSE_PAYLOAD = KmipTagResolver.TAG_RESPONSE_PAYLOAD;
-    public static final int TAG_REQUEST_PAYLOAD = KmipTagResolver.TAG_REQUEST_PAYLOAD;
+    public static final int TAG_RESPONSE_HEADER = KmipTagResolver.TAG_RESPONSE_HEADER;
+    public static final int TAG_PROTOCOL_VERSION = KmipTagResolver.TAG_PROTOCOL_VERSION;
+    public static final int TAG_TIMESTAMP = KmipTagResolver.TAG_TIMESTAMP;
+    public static final int TAG_BATCH_COUNT = KmipTagResolver.TAG_BATCH_COUNT;
     public static final int TAG_RESPONSE_BATCH_ITEM = KmipTagResolver.TAG_RESPONSE_BATCH_ITEM;
-    public static final int TAG_REQUEST_BATCH_ITEM = KmipTagResolver.TAG_REQUEST_BATCH_ITEM;
+    public static final int TAG_RESPONSE_PAYLOAD = KmipTagResolver.TAG_RESPONSE_PAYLOAD;
+    public static final int TAG_RESULT_STATUS = KmipTagResolver.TAG_RESULT_STATUS;
     public static final int TAG_UNIQUE_IDENTIFIER = KmipTagResolver.TAG_UNIQUE_IDENTIFIER;
+    public static final int TAG_OPERATION = KmipTagResolver.TAG_OPERATION;
     public static final int TAG_OBJECT_TYPE = KmipTagResolver.TAG_OBJECT_TYPE;
     public static final int TAG_SYMMETRIC_KEY = KmipTagResolver.TAG_SYMMETRIC_KEY;
+    public static final int TAG_RESULT_REASON = KmipTagResolver.TAG_RESULT_REASON;
+    public static final int TAG_RESULT_MESSAGE = KmipTagResolver.TAG_RESULT_MESSAGE;
     public static final int TAG_TEMPLATE_ATTRIBUTE = KmipTagResolver.TAG_TEMPLATE_ATTRIBUTE;
     public static final int TAG_KEY_BLOCK = KmipTagResolver.TAG_KEY_BLOCK;
     public static final int TAG_KEY_FORMAT_TYPE = KmipTagResolver.TAG_KEY_FORMAT_TYPE;
@@ -70,53 +63,37 @@ public class KmipEncoder {
     public static final int TAG_CRYPTOGRAPHIC_ALGORITHM = KmipTagResolver.TAG_CRYPTOGRAPHIC_ALGORITHM;
     public static final int TAG_CRYPTOGRAPHIC_LENGTH = KmipTagResolver.TAG_CRYPTOGRAPHIC_LENGTH;
     public static final int TAG_CRYPTOGRAPHIC_USAGE_MASK = KmipTagResolver.TAG_CRYPTOGRAPHIC_USAGE_MASK;
-    public static final int TAG_TIME_STAMP = KmipTagResolver.TAG_TIME_STAMP;
+
 
     /**
-     * Encodes a KMIP message into a byte array.
+     * Encodes a KmipMessage object into a TTLV byte array.
      *
-     * @param message The KMIP message to encode
-     * @return The encoded byte array
-     * @throws IOException If an error occurs during encoding
+     * @param message The KmipMessage to encode.
+     * @param rootTag The top-level tag for the message (e.g., TAG_RESPONSE_MESSAGE).
+     * @return Byte array representing the encoded TTLV message.
+     * @throws IOException If an I/O error occurs during encoding.
      */
-    public byte[] encode(KmipMessage message) throws IOException {
-        ByteArrayOutputStream baos = new ByteArrayOutputStream();
-        DataOutputStream dos = new DataOutputStream(baos);
+    public byte[] encode(KmipMessage message, int rootTag) throws IOException {
+        log.info("Encoding KMIP message with tag: 0x{}", Integer.toHexString(rootTag));
 
-        log.info("Encoding KMIP message with tag: 0x{}", Integer.toHexString(TAG_RESPONSE_MESSAGE));
+        ByteArrayOutputStream byteStream = new ByteArrayOutputStream();
+        DataOutputStream dataStream = new DataOutputStream(byteStream);
+        encodeStructure(dataStream, message, rootTag);
 
-        // Encode the message
-        encodeStructure(dos, message, TAG_RESPONSE_MESSAGE);
+        byte[] result = byteStream.toByteArray();
+        log.info("Encoded message size: {} bytes", result.length);
+        log.info("Encoded message hex dump: {}", bytesToHex(result, 0, Math.min(result.length, 100)));
 
-        byte[] encodedMessage = baos.toByteArray();
-        log.info("Encoded message size: {} bytes", encodedMessage.length);
+        return result;
+    }
 
-        // Fix the TTLV header for PyKMIP compatibility
-        if (encodedMessage.length >= 9) { // At least tag (4) + type (1) + length (4)
-            // 1. Fix the tag format (already done in encodeStructure)
-
-            // 2. Fix the type field - PyKMIP expects this to be 0x01 for structures
-            encodedMessage[4] = TYPE_STRUCTURE;
-
-            // Note: We don't fix the length field here because it will be fixed in KmipTcpServer
-            // before sending the response to the client
-
-            log.info("Updated TTLV header: Type=0x{}",
-                    Integer.toHexString(encodedMessage[4] & 0xFF));
+    private String bytesToHex(byte[] bytes, int offset, int length) {
+        StringBuilder sb = new StringBuilder();
+        for (int i = offset; i < offset + length && i < bytes.length; i++) {
+            sb.append(String.format("%02X ", bytes[i] & 0xFF));
+            if ((i - offset + 1) % 16 == 0) sb.append("\n");
         }
-
-        // Log the first 64 bytes of the encoded message as a hex dump
-        int bytesToLog = Math.min(encodedMessage.length, 64);
-        StringBuilder hexDump = new StringBuilder();
-        for (int i = 0; i < bytesToLog; i++) {
-            hexDump.append(String.format("%02X ", encodedMessage[i] & 0xFF));
-            if ((i + 1) % 16 == 0) {
-                hexDump.append("\n");
-            }
-        }
-        log.info("Encoded message hex dump: {}", hexDump.toString());
-
-        return encodedMessage;
+        return sb.toString();
     }
 
     private void encodeStructure(DataOutputStream dos, KmipMessage message, int tag) throws IOException {
@@ -125,32 +102,59 @@ public class KmipEncoder {
 
         log.info("Encoding structure with tag: 0x{}", Integer.toHexString(tag));
 
-        // For Response Message, ensure fields are in correct order
-        if (tag == TAG_RESPONSE_MESSAGE) {
-            log.info("Encoding Response Message structure");
-
-            // Response Header MUST be first
-            List<Object> responseHeaderValues = message.getFields().get(TAG_RESPONSE_HEADER);
-            if (responseHeaderValues != null && !responseHeaderValues.isEmpty()) {
-                log.info("Encoding Response Header");
-                encodeStructure(contentDos, (KmipMessage) responseHeaderValues.get(0), TAG_RESPONSE_HEADER);
-            } else {
-                String error = "Response Header is missing from Response Message";
-                log.error(error);
-                throw new IOException(error);
+        // For Response Header, ensure fields are in correct order
+        if (tag == TAG_RESPONSE_HEADER) {
+            // Protocol Version MUST be first
+            List<Object> protocolVersionValues = message.getFields().get(TAG_PROTOCOL_VERSION);
+            if (protocolVersionValues != null && !protocolVersionValues.isEmpty()) {
+                encodeStructure(contentDos, (KmipMessage) protocolVersionValues.get(0), TAG_PROTOCOL_VERSION);
             }
 
-            // Batch Items MUST be second
-            List<Object> batchItemValues = message.getFields().get(TAG_RESPONSE_BATCH_ITEM);
-            if (batchItemValues != null && !batchItemValues.isEmpty()) {
-                log.info("Encoding {} Batch Items", batchItemValues.size());
-                for (Object batchItem : batchItemValues) {
-                    encodeStructure(contentDos, (KmipMessage) batchItem, TAG_RESPONSE_BATCH_ITEM);
-                }
+            // Time Stamp MUST be second
+            List<Object> timestampValues = message.getFields().get(TAG_TIMESTAMP);
+            if (timestampValues != null && !timestampValues.isEmpty()) {
+                encodeField(contentDos, TAG_TIMESTAMP, timestampValues.get(0));
+            }
+
+            // Batch Count MUST be third
+            List<Object> batchCountValues = message.getFields().get(TAG_BATCH_COUNT);
+            if (batchCountValues != null && !batchCountValues.isEmpty()) {
+                encodeField(contentDos, TAG_BATCH_COUNT, batchCountValues.get(0));
+            }
+        }
+        // For Response Batch Item, ensure fields are in correct order
+        else if (tag == TAG_RESPONSE_BATCH_ITEM) {
+            // Operation MUST be first
+            List<Object> operationValues = message.getFields().get(TAG_OPERATION);
+            if (operationValues != null && !operationValues.isEmpty()) {
+                encodeField(contentDos, TAG_OPERATION, operationValues.get(0));
+            }
+
+            // Result Status MUST be second
+            List<Object> resultStatusValues = message.getFields().get(TAG_RESULT_STATUS);
+            if (resultStatusValues != null && !resultStatusValues.isEmpty()) {
+                encodeField(contentDos, TAG_RESULT_STATUS, resultStatusValues.get(0));
+            }
+
+            // Result Reason MUST be third if present
+            List<Object> resultReasonValues = message.getFields().get(TAG_RESULT_REASON);
+            if (resultReasonValues != null && !resultReasonValues.isEmpty()) {
+                encodeField(contentDos, TAG_RESULT_REASON, resultReasonValues.get(0));
+            }
+
+            // Result Message MUST be fourth if present - CRITICAL for PyKMIP compatibility
+            List<Object> resultMessageValues = message.getFields().get(TAG_RESULT_MESSAGE);
+            if (resultMessageValues != null && !resultMessageValues.isEmpty()) {
+                log.info("Encoding Result Message: {}", resultMessageValues.get(0));
+                encodeField(contentDos, TAG_RESULT_MESSAGE, resultMessageValues.get(0));
             } else {
-                String error = "Batch Items are missing from Response Message";
-                log.error(error);
-                throw new IOException(error);
+                log.warn("No Result Message found in Response Batch Item - PyKMIP client may fail");
+            }
+
+            // Response Payload MUST be fifth if present
+            List<Object> responsePayloadValues = message.getFields().get(TAG_RESPONSE_PAYLOAD);
+            if (responsePayloadValues != null && !responsePayloadValues.isEmpty()) {
+                encodeStructure(contentDos, (KmipMessage) responsePayloadValues.get(0), TAG_RESPONSE_PAYLOAD);
             }
         }
         // For Response Payload, ensure fields are in correct order
@@ -198,45 +202,25 @@ public class KmipEncoder {
                 log.info("- Tag: 0x{} -> Values: {}", Integer.toHexString(fieldTag), values);
             });
         }
-        // For other structures, encode fields in the order they appear in the message
         else {
+            // For other structures, encode fields in the order they were added
             for (Map.Entry<Integer, List<Object>> entry : message.getFields().entrySet()) {
                 int fieldTag = entry.getKey();
                 List<Object> values = entry.getValue();
-
-                if (values != null && !values.isEmpty()) {
-                    for (Object value : values) {
+                for (Object value : values) {
+                    if (value instanceof KmipMessage) {
+                        encodeStructure(contentDos, (KmipMessage) value, fieldTag);
+                    } else {
                         encodeField(contentDos, fieldTag, value);
                     }
                 }
             }
         }
 
-        // Write the tag, type, length, and value
-        // PyKMIP expects the tag to be in big-endian format without leading zeros
-        // So we need to write the tag as 3 bytes instead of 4
-        dos.writeByte((tag >> 16) & 0xFF); // Most significant byte
-        dos.writeByte((tag >> 8) & 0xFF);  // Middle byte
-        dos.writeByte(tag & 0xFF);         // Least significant byte
-        dos.writeByte(0x00);               // Padding byte to make it 4 bytes total
-
-        // Write the type - PyKMIP expects this to be 1 for structures
-        dos.writeByte(TYPE_STRUCTURE);
-
-        // Write the length
-        dos.writeInt(contentStream.size());
-
-        // Write the value
-        dos.write(contentStream.toByteArray());
-
-        // Add padding if needed
-        int padding = (8 - (contentStream.size() % 8)) % 8;
-        if (padding > 0) {
-            byte[] paddingBytes = new byte[padding];
-            dos.write(paddingBytes);
-            log.debug("Added {} bytes of zero padding after length {} (total length: {})",
-                padding, contentStream.size(), contentStream.size() + padding);
-        }
+        byte[] contentBytes = contentStream.toByteArray();
+        writeTagTypeLength(dos, tag, TYPE_STRUCTURE, contentBytes.length);
+        dos.write(contentBytes);
+        pad(dos, contentBytes.length); // Pad structure content
     }
 
     private void encodeField(DataOutputStream dos, int tag, Object value) throws IOException {
@@ -328,169 +312,122 @@ public class KmipEncoder {
 
             encodeStructure(dos, (KmipMessage) value, tag);
         } else if (value instanceof Integer) {
-            // Check if this tag represents an enumeration
-            boolean isEnum = KmipTagResolver.isEnumeration(tag);
-            log.debug("Checking if tag 0x{} ({}) is enumeration: {}",
-                Integer.toHexString(tag), KmipTagResolver.getTagName(tag), isEnum);
-
-            if (isEnum) {
+            // Special handling for object type and other enumeration tags
+            if (tag == TAG_OBJECT_TYPE || KmipTagResolver.isEnumerationTag(tag)) {
                 log.info("Encoding as Enumeration - Tag: 0x{}, Value: {}, Type: 0x{}",
-                    Integer.toHexString(tag), value, Integer.toHexString(TYPE_ENUMERATION));
-                encodeEnumeration(dos, tag, (Integer) value);
+                    Integer.toHexString(tag), value, Integer.toHexString(TYPE_ENUMERATION & 0xFF));
+                encodeInteger(dos, tag, (Integer) value, TYPE_ENUMERATION);
             } else {
                 log.info("Encoding as Integer - Tag: 0x{}, Value: {}, Type: 0x{}",
-                    Integer.toHexString(tag), value, Integer.toHexString(TYPE_INTEGER));
-                encodeInteger(dos, tag, (Integer) value);
+                    Integer.toHexString(tag), value, Integer.toHexString(TYPE_INTEGER & 0xFF));
+                encodeInteger(dos, tag, (Integer) value, TYPE_INTEGER);
             }
         } else if (value instanceof Long) {
-            log.info("Encoding as Long Integer - Tag: 0x{}", Integer.toHexString(tag));
-            encodeLongInteger(dos, tag, (Long) value);
+            byte type = (KmipTagResolver.isLongIntegerTag(tag)) ? TYPE_LONG_INTEGER : TYPE_BIG_INTEGER;
+            log.debug("Encoding as {} - Tag: 0x{}, Value: {}",
+                type == TYPE_LONG_INTEGER ? "LongInteger" : "BigInteger", Integer.toHexString(tag), value);
+            encodeLong(dos, tag, (Long) value, type);
         } else if (value instanceof Boolean) {
-            log.info("Encoding as Boolean - Tag: 0x{}", Integer.toHexString(tag));
+            log.debug("Encoding as Boolean - Tag: 0x{}, Value: {}", Integer.toHexString(tag), value);
             encodeBoolean(dos, tag, (Boolean) value);
         } else if (value instanceof String) {
-            log.info("Encoding as TextString - Tag: 0x{}", Integer.toHexString(tag));
+            log.debug("Encoding as TextString - Tag: 0x{}, Value: {}", Integer.toHexString(tag), value);
             encodeTextString(dos, tag, (String) value);
         } else if (value instanceof byte[]) {
-            log.info("Encoding as ByteString - Tag: 0x{}, Length: {}", Integer.toHexString(tag), ((byte[]) value).length);
+            log.debug("Encoding as ByteString - Tag: 0x{}, Length: {}", Integer.toHexString(tag), ((byte[]) value).length);
             encodeByteString(dos, tag, (byte[]) value);
         } else if (value instanceof Instant) {
-            log.info("Encoding as DateTime - Tag: 0x{}, Value: {}", Integer.toHexString(tag), value);
+            log.debug("Encoding as DateTime - Tag: 0x{}, Value: {}", Integer.toHexString(tag), value);
             encodeDateTime(dos, tag, (Instant) value);
+        } else if (value == null) {
+            log.warn("Skipping encoding for null value with tag: 0x{}", Integer.toHexString(tag));
         } else {
-            throw new IOException("Unsupported value type: " + (value != null ? value.getClass().getName() : "null"));
+            log.error("Unsupported data type '{}' for encoding field with tag: 0x{}", value.getClass().getName(), Integer.toHexString(tag));
+            throw new IOException("Unsupported data type for TTLV encoding: " + value.getClass().getName());
         }
     }
 
-    private void encodeInteger(DataOutputStream dos, int tag, int value) throws IOException {
-        log.debug("Encoding integer - Tag: 0x{}, Value: {}, Type: 0x{}",
-            Integer.toHexString(tag), value, Integer.toHexString(TYPE_INTEGER));
-
-        // PyKMIP expects the tag to be in big-endian format without leading zeros
-        dos.writeByte((tag >> 16) & 0xFF); // Most significant byte
-        dos.writeByte((tag >> 8) & 0xFF);  // Middle byte
-        dos.writeByte(tag & 0xFF);         // Least significant byte
-        dos.writeByte(0x00);               // Padding byte to make it 4 bytes total
-
-        dos.writeByte(TYPE_INTEGER);
-        dos.writeInt(4); // Length is always 4 bytes for an integer
-        dos.writeInt(value);
-
-        // Add padding (4 bytes for integers)
-        byte[] padding = new byte[4];
-        dos.write(padding);
-        log.debug("Added 4 bytes of zero padding after length 4 (total length: 8)");
+    private void encodeInteger(DataOutputStream dos, int tag, int value, byte type) throws IOException {
+        // For enumeration values, ensure we're using the correct type
+        if (type == TYPE_ENUMERATION) {
+            log.debug("Encoding enumeration - Tag: 0x{}, Value: {}, Type: 0x{}",
+                Integer.toHexString(tag), value, Integer.toHexString(type & 0xFF));
+            writeTagTypeLength(dos, tag, TYPE_ENUMERATION, 4);
+            dos.writeInt(value);
+            pad(dos, 4); // Add padding for enumeration values too
+        } else {
+            log.debug("Encoding integer - Tag: 0x{}, Value: {}, Type: 0x{}",
+                Integer.toHexString(tag), value, Integer.toHexString(type & 0xFF));
+            writeTagTypeLength(dos, tag, TYPE_INTEGER, 4);
+            dos.writeInt(value);
+            pad(dos, 4); // Pad integer value
+        }
     }
 
-    private void encodeLongInteger(DataOutputStream dos, int tag, long value) throws IOException {
-        dos.writeInt(tag);
-        dos.writeByte(TYPE_LONG_INTEGER);
-        dos.writeInt(8); // Length is always 8 bytes for a long integer
+     private void encodeLong(DataOutputStream dos, int tag, long value, byte type) throws IOException {
+        writeTagTypeLength(dos, tag, type, 8);
         dos.writeLong(value);
-    }
-
-    private void encodeEnumeration(DataOutputStream dos, int tag, int value) throws IOException {
-        log.debug("Encoding enumeration - Tag: 0x{}, Value: {}, Type: 0x{}",
-            Integer.toHexString(tag), value, Integer.toHexString(TYPE_ENUMERATION));
-
-        // PyKMIP expects the tag to be in big-endian format without leading zeros
-        dos.writeByte((tag >> 16) & 0xFF); // Most significant byte
-        dos.writeByte((tag >> 8) & 0xFF);  // Middle byte
-        dos.writeByte(tag & 0xFF);         // Least significant byte
-        dos.writeByte(0x00);               // Padding byte to make it 4 bytes total
-
-        dos.writeByte(TYPE_ENUMERATION);
-        dos.writeInt(4); // Length is always 4 bytes for an enumeration
-        dos.writeInt(value);
-
-        // Add padding (4 bytes for enumerations)
-        byte[] padding = new byte[4];
-        dos.write(padding);
-        log.debug("Added 4 bytes of zero padding after length 4 (total length: 8)");
+        // Long is 8 bytes, already aligned
     }
 
     private void encodeBoolean(DataOutputStream dos, int tag, boolean value) throws IOException {
-        // PyKMIP expects the tag to be in big-endian format without leading zeros
-        dos.writeByte((tag >> 16) & 0xFF); // Most significant byte
-        dos.writeByte((tag >> 8) & 0xFF);  // Middle byte
-        dos.writeByte(tag & 0xFF);         // Least significant byte
-        dos.writeByte(0x00);               // Padding byte to make it 4 bytes total
-
-        dos.writeByte(TYPE_BOOLEAN);
-        dos.writeInt(8); // Length is always 8 bytes for a boolean
-        dos.writeLong(value ? 1L : 0L);
+        writeTagTypeLength(dos, tag, TYPE_BOOLEAN, 8); // Booleans are encoded as 8 bytes in KMIP
+        dos.writeLong(value ? 1L : 0L); // Write 1 or 0 as a Long
     }
 
     private void encodeTextString(DataOutputStream dos, int tag, String value) throws IOException {
         byte[] bytes = value.getBytes(StandardCharsets.UTF_8);
-
-        // PyKMIP expects the tag to be in big-endian format without leading zeros
-        dos.writeByte((tag >> 16) & 0xFF); // Most significant byte
-        dos.writeByte((tag >> 8) & 0xFF);  // Middle byte
-        dos.writeByte(tag & 0xFF);         // Least significant byte
-        dos.writeByte(0x00);               // Padding byte to make it 4 bytes total
-
-        dos.writeByte(TYPE_TEXT_STRING);
-        dos.writeInt(bytes.length);
+        writeTagTypeLength(dos, tag, TYPE_TEXT_STRING, bytes.length);
         dos.write(bytes);
-
-        // Add padding if needed
-        int padding = (8 - (bytes.length % 8)) % 8;
-        if (padding > 0) {
-            byte[] paddingBytes = new byte[padding];
-            dos.write(paddingBytes);
-            log.debug("Added {} bytes of zero padding after length {} (total length: {})",
-                padding, bytes.length, bytes.length + padding);
-        }
+        pad(dos, bytes.length);
     }
 
     private void encodeByteString(DataOutputStream dos, int tag, byte[] value) throws IOException {
-        // PyKMIP expects the tag to be in big-endian format without leading zeros
-        dos.writeByte((tag >> 16) & 0xFF); // Most significant byte
-        dos.writeByte((tag >> 8) & 0xFF);  // Middle byte
-        dos.writeByte(tag & 0xFF);         // Least significant byte
-        dos.writeByte(0x00);               // Padding byte to make it 4 bytes total
-
-        dos.writeByte(TYPE_BYTE_STRING);
-        dos.writeInt(value.length);
+        writeTagTypeLength(dos, tag, TYPE_BYTE_STRING, value.length);
         dos.write(value);
+        pad(dos, value.length);
+    }
 
-        // Add padding if needed
-        int padding = (8 - (value.length % 8)) % 8;
+     private void encodeDateTime(DataOutputStream dos, int tag, Instant value) throws IOException {
+        // KMIP DateTime is typically a Long Integer representing seconds since epoch
+        writeTagTypeLength(dos, tag, TYPE_DATE_TIME, 8);
+        dos.writeLong(value.getEpochSecond());
+        // Long is 8 bytes, already aligned
+    }
+
+    private void writeTagTypeLength(DataOutputStream dos, int tag, byte type, int length) throws IOException {
+        // Create a zero-initialized buffer
+        byte[] headerBytes = new byte[8];
+        ByteBuffer header = ByteBuffer.wrap(headerBytes);
+        header.order(ByteOrder.BIG_ENDIAN); // KMIP uses big-endian
+
+        // Write Tag (3 bytes)
+        header.put((byte) ((tag >> 16) & 0xFF));
+        header.put((byte) ((tag >> 8) & 0xFF));
+        header.put((byte) (tag & 0xFF));
+
+        // Write Type (1 byte)
+        header.put(type);
+
+        // Write Length (4 bytes)
+        header.putInt(length);
+
+        dos.write(headerBytes);
+    }
+
+    private void pad(DataOutputStream dos, int length) throws IOException {
+        int padding = (8 - (length % 8)) % 8;
         if (padding > 0) {
-            byte[] paddingBytes = new byte[padding];
-            dos.write(paddingBytes);
+            byte[] zeroPadding = new byte[padding];
+            Arrays.fill(zeroPadding, (byte)0); // Explicitly set all padding bytes to zero
+            dos.write(zeroPadding);
+            log.debug("Added {} bytes of zero padding after length {} (total length: {})",
+                padding, length, length + padding);
         }
     }
 
-    private void encodeDateTime(DataOutputStream dos, int tag, Instant value) throws IOException {
-        // Convert to UTC
-        ZonedDateTime utcDateTime = value.atZone(ZoneOffset.UTC);
-
-        // KMIP uses seconds since Jan 1, 1970 UTC (same as Unix timestamp)
-        long seconds = utcDateTime.toEpochSecond();
-
-        // PyKMIP expects the tag to be in big-endian format without leading zeros
-        dos.writeByte((tag >> 16) & 0xFF); // Most significant byte
-        dos.writeByte((tag >> 8) & 0xFF);  // Middle byte
-        dos.writeByte(tag & 0xFF);         // Least significant byte
-        dos.writeByte(0x00);               // Padding byte to make it 4 bytes total
-
-        dos.writeByte(TYPE_DATE_TIME);
-        dos.writeInt(8); // Length is always 8 bytes for a date-time
-        dos.writeLong(seconds);
-    }
-
-    /**
-     * Encodes a Result Message field with the given message.
-     * This is a convenience method for encoding the Result Message field.
-     *
-     * @param dos The DataOutputStream to write to
-     * @param message The result message
-     * @throws IOException If an error occurs during encoding
-     */
-    public void encodeResultMessage(DataOutputStream dos, String message) throws IOException {
-        log.info("Encoding Result Message: {}", message);
-        encodeTextString(dos, TAG_RESULT_MESSAGE, message);
+    private void encodeObjectType(DataOutputStream dos, int objectType) throws IOException {
+        log.debug("Encoding object type - Value: {} (0x{})", objectType, Integer.toHexString(objectType));
+        encodeInteger(dos, TAG_OBJECT_TYPE, objectType, TYPE_ENUMERATION);
     }
 }

@@ -1,8 +1,9 @@
 package com.kmip.server.protocol.codec;
 
-import com.kmip.server.protocol.tag.KmipTagResolver;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
+
+import com.kmip.server.protocol.tag.KmipTagResolver;
 
 import java.io.ByteArrayOutputStream;
 import java.io.DataOutputStream;
