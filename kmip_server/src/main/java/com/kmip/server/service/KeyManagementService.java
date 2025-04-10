@@ -1,5 +1,7 @@
 package com.kmip.server.service;
 
+import com.kmip.server.core.exception.KmipException;
+
 import javax.crypto.SecretKey;
 import java.util.Map;
 import java.util.Optional;
@@ -30,4 +32,4 @@ public interface KeyManagementService {
     Optional<SecretKey> getSymmetricKey(String uniqueID);
 
     // TODO: Add methods for other operations (destroy, rotate, getAttributes etc.)
-} 
+}

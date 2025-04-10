@@ -18,7 +18,7 @@ class KeyMetadata:
     usage_mask: List[CryptographicUsageMask]
 
 class KmipClient:
-    def __init__(self, host: str = 'localhost', port: int = 5696) -> None:
+    def __init__(self, host: str = 'localhost', port: int = 5697) -> None:
         # Define path to the server certificate
         cert_path = os.path.join(os.path.dirname(__file__), 'kmip_server_cert.pem')
         logger.info(f"Using server CA certificate: {cert_path}")

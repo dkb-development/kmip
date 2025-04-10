@@ -1,5 +1,6 @@
 package com.kmip.server.service;
 
+import com.kmip.server.core.exception.KmipException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value; // Example import
@@ -22,10 +23,10 @@ import java.util.UUID;
 public class ExternalKeyManagementService implements KeyManagementService {
 
     private static final Logger log = LoggerFactory.getLogger(ExternalKeyManagementService.class);
-    
+
     // @Autowired
     // private RestTemplate restTemplate;
-    
+
     // @Value("${kms.endpoint.url}")
     // private String kmsEndpointUrl;
 
@@ -34,13 +35,13 @@ public class ExternalKeyManagementService implements KeyManagementService {
         log.info("Using ExternalKMS to create Symmetric Key - Algorithm: {}, Length: {}", algorithm, keyLength);
 
         // --- Commented out REST API Call Example ---
-        /* 
+        /*
         String createKeyUrl = kmsEndpointUrl + "/keys";
         Map<String, Object> requestBody = new HashMap<>();
         requestBody.put("algorithm", algorithm);
         requestBody.put("keyLength", keyLength);
         requestBody.put("attributes", attributes); // Pass relevant attributes
-        
+
         try {
             // ResponseEntity<Map> response = restTemplate.postForEntity(createKeyUrl, requestBody, Map.class);
             // if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
@@ -59,15 +60,15 @@ public class ExternalKeyManagementService implements KeyManagementService {
         }
         */
         // --- End Commented Out Example ---
-        
-         // --- Temporary Fallback/Placeholder --- 
+
+         // --- Temporary Fallback/Placeholder ---
          log.warn("External KMS REST call is commented out. Falling back to local generation (REMOVE THIS LATER).");
          try {
              return generateLocallyForFallback(algorithm, keyLength);
          } catch (Exception e) {
              throw new KmipException("Fallback local key generation failed", e);
          }
-         // --- End Temporary Fallback --- 
+         // --- End Temporary Fallback ---
     }
 
     private String generateLocallyForFallback(String algorithm, int keyLength) throws Exception {
@@ -87,4 +88,4 @@ public class ExternalKeyManagementService implements KeyManagementService {
         log.warn("External KMS getSymmetricKey not implemented.");
         return Optional.empty(); // Return empty for now
     }
-} 
+}
