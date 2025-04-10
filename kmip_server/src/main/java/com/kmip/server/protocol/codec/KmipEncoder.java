@@ -1,6 +1,6 @@
 package com.kmip.server.protocol.codec;
 
-import lombok.extern.slf4j.Slf4j;
+
 import org.springframework.stereotype.Component;
 
 import com.kmip.server.protocol.message.KmipMessage;
@@ -13,8 +13,7 @@ import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
-import java.time.ZoneOffset;
-import java.time.ZonedDateTime;
+
 import java.util.List;
 import java.util.Map;
 import java.util.Arrays;
@@ -22,7 +21,6 @@ import java.util.Arrays;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-@Slf4j
 @Component
 public class KmipEncoder {
 
@@ -38,7 +36,7 @@ public class KmipEncoder {
     private static final byte TYPE_TEXT_STRING = 0x07;
     private static final byte TYPE_BYTE_STRING = 0x08;
     private static final byte TYPE_DATE_TIME = 0x09;
-    private static final byte TYPE_INTERVAL = 0x0A; // Encoding Interval might need specific logic
+    // private static final byte TYPE_INTERVAL = 0x0A; // Encoding Interval might need specific logic
 
     // Tag constants (add more as needed, mirroring KmipTagResolver if used)
     public static final int TAG_RESPONSE_MESSAGE = KmipTagResolver.TAG_RESPONSE_MESSAGE;
@@ -426,8 +424,114 @@ public class KmipEncoder {
         }
     }
 
-    private void encodeObjectType(DataOutputStream dos, int objectType) throws IOException {
-        log.debug("Encoding object type - Value: {} (0x{})", objectType, Integer.toHexString(objectType));
-        encodeInteger(dos, TAG_OBJECT_TYPE, objectType, TYPE_ENUMERATION);
+    // Utility method for encoding object type (kept for reference)
+    // private void encodeObjectType(DataOutputStream dos, int objectType) throws IOException {
+    //     log.debug("Encoding object type - Value: {} (0x{})", objectType, Integer.toHexString(objectType));
+    //     encodeInteger(dos, TAG_OBJECT_TYPE, objectType, TYPE_ENUMERATION);
+    // }
+
+    /**
+     * Creates a TTLV-encoded byte array for a Get operation response that is compatible with PyKMIP
+     *
+     * @param objectType The object type (e.g., 2 for Symmetric Key)
+     * @param uniqueIdentifier The unique identifier of the key
+     * @param keyMaterial The key material (raw bytes)
+     * @param cryptoAlgorithm The cryptographic algorithm (e.g., 3 for AES)
+     * @param cryptoLength The cryptographic length in bits
+     * @param cryptoUsageMask The cryptographic usage mask (e.g., 12 for Encrypt | Decrypt)
+     * @return A TTLV-encoded byte array for the response payload
+     * @throws IOException If an error occurs during encoding
+     */
+    public byte[] createGetResponsePayload(
+            int objectType,
+            String uniqueIdentifier,
+            byte[] keyMaterial,
+            int cryptoAlgorithm,
+            int cryptoLength,
+            int cryptoUsageMask) throws IOException {
+
+        ByteArrayOutputStream baos = new ByteArrayOutputStream();
+        DataOutputStream dos = new DataOutputStream(baos);
+
+        // Create the response payload structure
+        // 1. Object Type (Required)
+        writeTagTypeLength(dos, TAG_OBJECT_TYPE, TYPE_ENUMERATION, 4);
+        dos.writeInt(objectType);
+        pad(dos, 4);
+
+        // 2. Unique Identifier (Required)
+        byte[] uniqueIdBytes = uniqueIdentifier.getBytes(StandardCharsets.UTF_8);
+        writeTagTypeLength(dos, TAG_UNIQUE_IDENTIFIER, TYPE_TEXT_STRING, uniqueIdBytes.length);
+        dos.write(uniqueIdBytes);
+        pad(dos, uniqueIdBytes.length);
+
+        // 3. Symmetric Key (Required)
+        // Create the Symmetric Key structure
+        ByteArrayOutputStream symmetricKeyBaos = new ByteArrayOutputStream();
+        DataOutputStream symmetricKeyDos = new DataOutputStream(symmetricKeyBaos);
+
+        // Create the Key Block structure
+        ByteArrayOutputStream keyBlockBaos = new ByteArrayOutputStream();
+        DataOutputStream keyBlockDos = new DataOutputStream(keyBlockBaos);
+
+        // 1. Key Format Type (Required)
+        writeTagTypeLength(keyBlockDos, TAG_KEY_FORMAT_TYPE, TYPE_ENUMERATION, 4);
+        keyBlockDos.writeInt(1); // Raw format
+        pad(keyBlockDos, 4);
+
+        // 2. Key Value (Required)
+        // Create the Key Value structure
+        ByteArrayOutputStream keyValueBaos = new ByteArrayOutputStream();
+        DataOutputStream keyValueDos = new DataOutputStream(keyValueBaos);
+
+        // Key Material (Required)
+        writeTagTypeLength(keyValueDos, TAG_KEY_MATERIAL, TYPE_BYTE_STRING, keyMaterial.length);
+        keyValueDos.write(keyMaterial);
+        pad(keyValueDos, keyMaterial.length);
+
+        // Add Key Value to Key Block
+        byte[] keyValueBytes = keyValueBaos.toByteArray();
+        writeTagTypeLength(keyBlockDos, TAG_KEY_VALUE, TYPE_STRUCTURE, keyValueBytes.length);
+        keyBlockDos.write(keyValueBytes);
+        pad(keyBlockDos, keyValueBytes.length);
+
+        // 3. Cryptographic Algorithm (Required)
+        writeTagTypeLength(keyBlockDos, TAG_CRYPTOGRAPHIC_ALGORITHM, TYPE_ENUMERATION, 4);
+        keyBlockDos.writeInt(cryptoAlgorithm);
+        pad(keyBlockDos, 4);
+
+        // 4. Cryptographic Length (Required)
+        writeTagTypeLength(keyBlockDos, TAG_CRYPTOGRAPHIC_LENGTH, TYPE_INTEGER, 4);
+        keyBlockDos.writeInt(cryptoLength);
+        pad(keyBlockDos, 4);
+
+        // 5. Cryptographic Usage Mask (Required)
+        writeTagTypeLength(keyBlockDos, TAG_CRYPTOGRAPHIC_USAGE_MASK, TYPE_ENUMERATION, 4);
+        keyBlockDos.writeInt(cryptoUsageMask);
+        pad(keyBlockDos, 4);
+
+        // Add Key Block to Symmetric Key
+        byte[] keyBlockBytes = keyBlockBaos.toByteArray();
+        writeTagTypeLength(symmetricKeyDos, TAG_KEY_BLOCK, TYPE_STRUCTURE, keyBlockBytes.length);
+        symmetricKeyDos.write(keyBlockBytes);
+        pad(symmetricKeyDos, keyBlockBytes.length);
+
+        // Add Symmetric Key to Response Payload
+        byte[] symmetricKeyBytes = symmetricKeyBaos.toByteArray();
+        writeTagTypeLength(dos, TAG_SYMMETRIC_KEY, TYPE_STRUCTURE, symmetricKeyBytes.length);
+        dos.write(symmetricKeyBytes);
+        pad(dos, symmetricKeyBytes.length);
+
+        return baos.toByteArray();
+    }
+
+    /**
+     * Converts a byte array to a hexadecimal string for debugging purposes.
+     *
+     * @param bytes The byte array to convert
+     * @return A hexadecimal string representation of the byte array
+     */
+    public String bytesToHex(byte[] bytes) {
+        return bytesToHex(bytes, 0, bytes.length);
     }
 }

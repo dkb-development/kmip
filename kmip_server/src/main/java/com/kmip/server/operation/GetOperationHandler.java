@@ -6,7 +6,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 import com.kmip.server.core.exception.KmipException;
-import com.kmip.server.protocol.codec.PyKmipCompatEncoder;
+import com.kmip.server.protocol.codec.KmipEncoder;
 import com.kmip.server.protocol.message.KmipMessage;
 import com.kmip.server.protocol.tag.KmipTagResolver;
 import com.kmip.server.protocol.tag.TagValueUtil;
@@ -32,7 +32,7 @@ public class GetOperationHandler implements OperationHandler {
     private KeyManagementService keyManagementService; // Explicitly use InMemoryKMS
 
     @Autowired
-    private PyKmipCompatEncoder pyKmipCompatEncoder;
+    private KmipEncoder kmipEncoder;
 
     @Override
     public KmipMessage handle(KmipMessage requestHeader, KmipMessage requestPayload) throws KmipException {
@@ -56,12 +56,12 @@ public class GetOperationHandler implements OperationHandler {
         SecretKey key = keyOptional.get();
         log.info("Successfully retrieved key with ID: {}", uniqueIdentifier);
 
-        // 3. Use PyKmipCompatEncoder to create a response payload that is compatible with PyKMIP
+        // 3. Use KmipEncoder to create a response payload that is compatible with PyKMIP
         KmipMessage responsePayload = new KmipMessage();
 
         try {
             // Create a TTLV-encoded byte array for the response payload
-            byte[] encodedPayload = pyKmipCompatEncoder.createGetResponsePayload(
+            byte[] encodedPayload = kmipEncoder.createGetResponsePayload(
                 OBJECT_TYPE_SYMMETRIC_KEY,
                 uniqueIdentifier,
                 key.getEncoded(),
@@ -71,10 +71,10 @@ public class GetOperationHandler implements OperationHandler {
             );
 
             // Log the encoded payload for debugging
-            log.info("Encoded payload hex dump: {}", pyKmipCompatEncoder.bytesToHex(encodedPayload));
+            log.info("Encoded payload hex dump: {}", kmipEncoder.bytesToHex(encodedPayload));
 
             // For now, we'll still use the standard KmipMessage approach
-            // But we'll keep the PyKmipCompatEncoder code for future reference
+            // But we'll keep the direct encoding code for future reference
 
             // Object Type MUST be first (REQUIRED)
             responsePayload.addField(KmipTagResolver.TAG_OBJECT_TYPE, OBJECT_TYPE_SYMMETRIC_KEY);
