@@ -133,12 +133,31 @@ def main() -> None:
             logger.info(f"  Usage Mask: {key_metadata.usage_mask}")
             logger.info("="*50 + "\n")
 
+        # Step 3: Destroy the key
+        logger.info("="*50)
+        logger.info("STEP 3: DESTROYING THE SYMMETRIC KEY")
+        logger.info("="*50)
+        client.destroy_symmetric_key(key_id)
+        logger.info(f"SUCCESS: Destroyed symmetric key with ID: {key_id}")
+        logger.info("="*50 + "\n")
+
+        # Step 4: Verify the key is destroyed by trying to retrieve it
+        logger.info("="*50)
+        logger.info("STEP 4: VERIFYING KEY DESTRUCTION")
+        logger.info("="*50)
+        try:
+            destroyed_key = client.get_symmetric_key(key_id)
+            logger.error(f"ERROR: Key with ID {key_id} still exists after destruction!")
+        except Exception as e:
+            logger.info(f"SUCCESS: Key with ID {key_id} no longer accessible (Expected error: {e})")
+        logger.info("="*50 + "\n")
+
     except Exception as e:
         logger.error(f"Error in demonstration: {e}")
 
     logger.info("="*50)
     logger.info("KMIP CLIENT DEMONSTRATION COMPLETE")
-    logger.info("Successfully demonstrated KMIP 2.0 operations: Create and Get")
+    logger.info("Successfully demonstrated KMIP 2.0 operations: Create, Get, and Destroy")
     logger.info("="*50)
 
 if __name__ == "__main__":

@@ -258,26 +258,50 @@ public class KmipEncoder {
     /**
      * Encodes a Response Payload structure.
      * Fields must be encoded in a specific order according to the KMIP specification.
+     * According to KMIP 2.0 spec Section 9.1, fields should be ordered by tag value (ascending).
+     *
+     * However, for compatibility with PyKMIP client, we need to handle the Destroy operation
+     * specially by including ONLY the Unique Identifier field in the response payload.
      */
     private void encodeResponsePayload(DataOutputStream dos, KmipMessage message) throws IOException {
         log.debug("Encoding Response Payload structure");
 
-        // Object Type MUST be first
-        List<Object> objectTypeValues = message.getFields().get(TAG_OBJECT_TYPE);
-        if (objectTypeValues != null && !objectTypeValues.isEmpty()) {
-            log.debug("Encoding Object Type (0x{}): {}", Integer.toHexString(TAG_OBJECT_TYPE), objectTypeValues.get(0));
-            encodeField(dos, TAG_OBJECT_TYPE, objectTypeValues.get(0));
-        } else {
-            String error = "Object Type is missing from Response Payload";
-            log.error(error);
-            throw new IOException(error);
+        // Check if this is a Destroy operation response by looking at the fields
+        // If the message contains ONLY a Unique Identifier field, assume it's a Destroy operation
+        boolean isDestroyOperation = false;
+
+        if (message.getFields().size() == 1 && message.getFields().containsKey(TAG_UNIQUE_IDENTIFIER)) {
+            isDestroyOperation = true;
+            log.debug("Detected Destroy operation response - contains ONLY Unique Identifier field");
         }
 
-        // Unique Identifier MUST be second
-        List<Object> uniqueIdentifierValues = message.getFields().get(TAG_UNIQUE_IDENTIFIER);
-        if (uniqueIdentifierValues != null && !uniqueIdentifierValues.isEmpty()) {
-            log.debug("Encoding Unique Identifier (0x{}): {}", Integer.toHexString(TAG_UNIQUE_IDENTIFIER), uniqueIdentifierValues.get(0));
-            encodeField(dos, TAG_UNIQUE_IDENTIFIER, uniqueIdentifierValues.get(0));
+        if (isDestroyOperation) {
+            // For Destroy operation, encode ONLY the Unique Identifier field
+            List<Object> uniqueIdentifierValues = message.getFields().get(TAG_UNIQUE_IDENTIFIER);
+            if (uniqueIdentifierValues != null && !uniqueIdentifierValues.isEmpty()) {
+                log.debug("Encoding ONLY Unique Identifier (0x{}) for Destroy operation: {}",
+                    Integer.toHexString(TAG_UNIQUE_IDENTIFIER), uniqueIdentifierValues.get(0));
+                encodeField(dos, TAG_UNIQUE_IDENTIFIER, uniqueIdentifierValues.get(0));
+            }
+        } else {
+            // For all other operations, follow the KMIP spec's tag ordering
+            // Object Type (0x420057) MUST be first according to tag ordering in KMIP spec
+            List<Object> objectTypeValues = message.getFields().get(TAG_OBJECT_TYPE);
+            if (objectTypeValues != null && !objectTypeValues.isEmpty()) {
+                log.debug("Encoding Object Type (0x{}): {}", Integer.toHexString(TAG_OBJECT_TYPE), objectTypeValues.get(0));
+                encodeField(dos, TAG_OBJECT_TYPE, objectTypeValues.get(0));
+            } else {
+                String error = "Object Type is missing from Response Payload";
+                log.error(error);
+                throw new IOException(error);
+            }
+
+            // Unique Identifier (0x420094) MUST be second according to tag ordering in KMIP spec
+            List<Object> uniqueIdentifierValues = message.getFields().get(TAG_UNIQUE_IDENTIFIER);
+            if (uniqueIdentifierValues != null && !uniqueIdentifierValues.isEmpty()) {
+                log.debug("Encoding Unique Identifier (0x{}): {}", Integer.toHexString(TAG_UNIQUE_IDENTIFIER), uniqueIdentifierValues.get(0));
+                encodeField(dos, TAG_UNIQUE_IDENTIFIER, uniqueIdentifierValues.get(0));
+            }
         }
 
         // Symmetric Key MUST be third (for Get operation)

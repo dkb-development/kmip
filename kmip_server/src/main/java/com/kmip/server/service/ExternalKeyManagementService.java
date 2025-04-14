@@ -88,4 +88,15 @@ public class ExternalKeyManagementService implements KeyManagementService {
         log.warn("External KMS getSymmetricKey not implemented.");
         return Optional.empty(); // Return empty for now
     }
+
+    @Override
+    public boolean destroySymmetricKey(String uniqueID) {
+        log.info("Attempting to destroy key ID {} from External KMS", uniqueID);
+        
+        // TODO: Implement REST call to external KMS to destroy key by ID
+        // This would be similar to the createSymmetricKey method, but with a different endpoint
+        
+        log.warn("External KMS destroySymmetricKey not implemented.");
+        return false; // Return false for now
+    }
 }

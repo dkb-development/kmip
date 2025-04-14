@@ -63,5 +63,26 @@ public class InMemoryKeyManagementService implements KeyManagementService {
         return Optional.ofNullable(key);
     }
 
-    // TODO: Implement other methods (destroy, etc.) by manipulating the keyStore map
+    @Override
+    public boolean destroySymmetricKey(String uniqueID) {
+        log.info("Attempting to destroy key with ID: {}", uniqueID);
+        
+        // Check if the key exists
+        if (!keyStore.containsKey(uniqueID)) {
+            log.warn("Key with ID {} not found in key store", uniqueID);
+            return false;
+        }
+        
+        // Remove the key from the store
+        SecretKey removedKey = keyStore.remove(uniqueID);
+        
+        // Log the result
+        if (removedKey != null) {
+            log.info("Successfully destroyed key with ID: {}", uniqueID);
+            return true;
+        } else {
+            log.warn("Failed to destroy key with ID: {}", uniqueID);
+            return false;
+        }
+    }
 }

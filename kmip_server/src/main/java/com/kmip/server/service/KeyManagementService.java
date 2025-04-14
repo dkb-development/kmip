@@ -31,5 +31,11 @@ public interface KeyManagementService {
      */
     Optional<SecretKey> getSymmetricKey(String uniqueID);
 
-    // TODO: Add methods for other operations (destroy, rotate, getAttributes etc.)
+    /**
+     * Destroys a symmetric key, rendering it permanently unusable.
+     * 
+     * @param uniqueID The unique identifier of the key to destroy.
+     * @return true if the key was successfully destroyed, false if the key was not found.
+     */
+    boolean destroySymmetricKey(String uniqueID);
 }

@@ -153,20 +153,52 @@ public class KmipTcpServer implements InitializingBean, DisposableBean {
                          logParsedMessage(responseMessage, 0);
 
                          // Check for the presence of specific fields in the response payload
-                         KmipMessage batchItem = (KmipMessage) responseMessage.getFields().get(KmipTagResolver.TAG_RESPONSE_BATCH_ITEM).get(0);
-                         if (batchItem != null) {
-                             KmipMessage responsePayload = (KmipMessage) batchItem.getFields().get(KmipTagResolver.TAG_RESPONSE_PAYLOAD).get(0);
-                             if (responsePayload != null) {
-                                 log.info("Response Payload Fields: {}", responsePayload.getFields().keySet().stream()
-                                     .map(k -> "0x" + Integer.toHexString(k))
-                                     .collect(java.util.stream.Collectors.joining(", ")));
+                         if (responseMessage.getFields().containsKey(KmipTagResolver.TAG_RESPONSE_BATCH_ITEM) &&
+                             responseMessage.getFields().get(KmipTagResolver.TAG_RESPONSE_BATCH_ITEM) != null) {
 
-                                 // Check for the presence of the SYMMETRIC_KEY field
-                                 if (responsePayload.getFields().containsKey(KmipTagResolver.TAG_SYMMETRIC_KEY)) {
-                                     log.info("SYMMETRIC_KEY field is present with tag: 0x{}",
-                                         Integer.toHexString(KmipTagResolver.TAG_SYMMETRIC_KEY));
+                             KmipMessage batchItem = (KmipMessage) responseMessage.getFields().get(KmipTagResolver.TAG_RESPONSE_BATCH_ITEM).get(0);
+                             if (batchItem != null) {
+                                 // Get the operation type to determine what fields to expect
+                                 Integer operationType = null;
+                                 if (batchItem.getFields().containsKey(KmipTagResolver.TAG_OPERATION) &&
+                                     batchItem.getFields().get(KmipTagResolver.TAG_OPERATION) != null) {
+                                     operationType = (Integer) batchItem.getFields().get(KmipTagResolver.TAG_OPERATION).get(0);
+                                     log.info("Response is for operation type: 0x{} ({})",
+                                         Integer.toHexString(operationType), getOperationName((byte)operationType.intValue()));
+                                 }
+
+                                 // Check if response payload exists
+                                 if (batchItem.getFields().containsKey(KmipTagResolver.TAG_RESPONSE_PAYLOAD) &&
+                                     batchItem.getFields().get(KmipTagResolver.TAG_RESPONSE_PAYLOAD) != null) {
+
+                                     KmipMessage responsePayload = (KmipMessage) batchItem.getFields().get(KmipTagResolver.TAG_RESPONSE_PAYLOAD).get(0);
+                                     if (responsePayload != null) {
+                                         log.info("Response Payload Fields: {}", responsePayload.getFields().keySet().stream()
+                                             .map(k -> "0x" + Integer.toHexString(k))
+                                             .collect(java.util.stream.Collectors.joining(", ")));
+
+                                         // For Get operation, check for SYMMETRIC_KEY field
+                                         if (operationType != null && operationType == GET_TYPE) {
+                                             if (responsePayload.getFields().containsKey(KmipTagResolver.TAG_SYMMETRIC_KEY)) {
+                                                 log.info("SYMMETRIC_KEY field is present with tag: 0x{}",
+                                                     Integer.toHexString(KmipTagResolver.TAG_SYMMETRIC_KEY));
+                                             } else {
+                                                 log.warn("SYMMETRIC_KEY field is missing from Get operation response payload!");
+                                             }
+                                         }
+
+                                         // For Destroy operation, check for UNIQUE_IDENTIFIER field
+                                         if (operationType != null && operationType == DESTROY_TYPE) {
+                                             if (responsePayload.getFields().containsKey(KmipTagResolver.TAG_UNIQUE_IDENTIFIER)) {
+                                                 log.info("UNIQUE_IDENTIFIER field is present with tag: 0x{}",
+                                                     Integer.toHexString(KmipTagResolver.TAG_UNIQUE_IDENTIFIER));
+                                             } else {
+                                                 log.warn("UNIQUE_IDENTIFIER field is missing from Destroy operation response payload!");
+                                             }
+                                         }
+                                     }
                                  } else {
-                                     log.warn("SYMMETRIC_KEY field is missing from response payload!");
+                                     log.info("No response payload in batch item");
                                  }
                              }
                          }

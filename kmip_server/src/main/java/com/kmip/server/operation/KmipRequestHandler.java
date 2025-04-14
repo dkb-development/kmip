@@ -145,7 +145,9 @@ public class KmipRequestHandler {
         log.debug("Building SUCCESS response for operation {}", operationCode);
 
         // Validate response payload
-        if (responsePayload != null && !responsePayload.getFields().containsKey(KmipTagResolver.TAG_OBJECT_TYPE)) {
+        // For Destroy operation (0x14), we don't require the Object Type field
+        // because the PyKMIP client expects only the Unique Identifier field
+        if (operationCode != 0x14 && responsePayload != null && !responsePayload.getFields().containsKey(KmipTagResolver.TAG_OBJECT_TYPE)) {
             log.error("Response payload is missing required Object Type field");
             return buildErrorResponse("Internal Error: Missing Object Type", protocolVersion, ResultReason.GENERAL_FAILURE);
         }
