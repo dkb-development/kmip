@@ -11,6 +11,7 @@ import com.kmip.server.protocol.message.KmipMessage;
 import com.kmip.server.protocol.tag.KmipTagResolver;
 import com.kmip.server.protocol.tag.TagValueUtil;
 import com.kmip.server.service.KeyManagementService;
+import com.kmip.server.core.enums.KmipResultReason;
 
 import javax.crypto.SecretKey;
 import java.io.IOException;
@@ -50,7 +51,7 @@ public class GetOperationHandler implements OperationHandler {
         if (!keyOptional.isPresent()) {
             log.error("Key with ID {} not found", uniqueIdentifier);
             throw new KmipException("Key not found: " + uniqueIdentifier,
-                                    KmipRequestHandler.ResultReason.ITEM_NOT_FOUND);
+                                    KmipResultReason.ITEM_NOT_FOUND);
         }
 
         SecretKey key = keyOptional.get();

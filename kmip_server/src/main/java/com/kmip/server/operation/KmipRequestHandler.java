@@ -9,6 +9,8 @@ import com.kmip.server.core.exception.KmipException;
 import com.kmip.server.protocol.message.KmipMessage;
 import com.kmip.server.protocol.tag.KmipTagResolver;
 import com.kmip.server.protocol.tag.TagValueUtil;
+import com.kmip.server.core.enums.KmipResultStatus;
+import com.kmip.server.core.enums.KmipResultReason;
 
 import jakarta.annotation.PostConstruct;
 import java.time.Instant;
@@ -23,35 +25,7 @@ public class KmipRequestHandler {
 
     private static final Logger log = LoggerFactory.getLogger(KmipRequestHandler.class);
 
-    // --- Enums for Status/Reason (Defined at the top) ---
-    public enum ResultStatus {
-        SUCCESS(0x00000000),
-        OPERATION_FAILED(0x00000001);
-        // Add other statuses as needed
-
-        private final int code;
-        ResultStatus(int code) { this.code = code; }
-        public int getCode() { return code; }
-
-        // Helper to use the enum instance directly in addField if needed
-        // (Requires KmipEncoder to handle the enum type or getCode() called explicitly)
-        // @Override public String toString() { return Integer.toString(code); }
-    }
-
-    public enum ResultReason {
-        // Subset of KMIP reasons - add more as needed (Table 336 in KMIP 1.4 Spec)
-        ITEM_NOT_FOUND(0x00000001),
-        OPERATION_NOT_SUPPORTED(0x00000006),
-        INVALID_MESSAGE(0x00000009),
-        PERMISSION_DENIED(0x0000000A),
-        GENERAL_FAILURE(0x0000000F);
-
-        private final int code;
-        ResultReason(int code) { this.code = code; }
-        public int getCode() { return code; }
-         // Helper for logging/debugging
-        // @Override public String toString() { return name() + "(0x" + Integer.toHexString(code) + ")"; }
-    }
+    // --- Using global KMIP enums instead of local definitions ---
     // --- End Enums ---
 
     private final Map<Integer, OperationHandler> operationHandlerMap = new HashMap<>();
@@ -81,7 +55,7 @@ public class KmipRequestHandler {
         // Initial checks
         if (requestMessage == null || requestMessage.getFields() == null || requestMessage.getFields().isEmpty()) {
             log.error("KmipRequestHandler received a null or empty requestMessage object.");
-            return buildErrorResponse("Invalid Request Message Object Received", null, ResultReason.INVALID_MESSAGE);
+            return buildErrorResponse("Invalid Request Message Object Received", null, KmipResultReason.INVALID_MESSAGE);
         }
         log.debug("KmipRequestHandler processing request. Top-level tags: {}", requestMessage.getFields().keySet());
 
@@ -90,7 +64,7 @@ public class KmipRequestHandler {
         KmipMessage protocolVersion = null; // Initialize protocolVersion
         if (requestHeader == null) {
             log.error("Request message is missing the Request Header (Tag {}).", KmipTagResolver.TAG_REQUEST_HEADER);
-            return buildErrorResponse("Missing Request Header", null, ResultReason.INVALID_MESSAGE);
+            return buildErrorResponse("Missing Request Header", null, KmipResultReason.INVALID_MESSAGE);
         } else {
             // Extract Protocol Version from header (for response)
             protocolVersion = TagValueUtil.getProtocolVersionStructure(requestHeader).orElse(null);
@@ -101,19 +75,19 @@ public class KmipRequestHandler {
         KmipMessage batchItem = TagValueUtil.getBatchItem(requestMessage).orElse(null);
         if (batchItem == null) {
             log.error("Request message does not contain a Batch Item (Tag {} or {}). Check message structure.", KmipTagResolver.TAG_REQUEST_BATCH_ITEM, KmipTagResolver.TAG_RESPONSE_BATCH_ITEM);
-            return buildErrorResponse("Missing Batch Item", protocolVersion, ResultReason.INVALID_MESSAGE); // Use extracted PV
+            return buildErrorResponse("Missing Batch Item", protocolVersion, KmipResultReason.INVALID_MESSAGE); // Use extracted PV
         }
 
         Integer operationCode = TagValueUtil.getOperation(batchItem).orElse(null);
         if (operationCode == null) {
             log.error("Batch item does not contain an Operation (Tag {}).", KmipTagResolver.TAG_OPERATION);
-            return buildErrorResponse("Missing Operation in Batch Item", protocolVersion, ResultReason.INVALID_MESSAGE);
+            return buildErrorResponse("Missing Operation in Batch Item", protocolVersion, KmipResultReason.INVALID_MESSAGE);
         }
 
         OperationHandler handler = operationHandlerMap.get(operationCode);
         if (handler == null) {
             log.error("No handler found for operation code: {}", operationCode);
-            return buildErrorResponse("Unsupported Operation: " + operationCode, protocolVersion, ResultReason.OPERATION_NOT_SUPPORTED);
+            return buildErrorResponse("Unsupported Operation: " + operationCode, protocolVersion, KmipResultReason.OPERATION_NOT_SUPPORTED);
         }
 
         log.info("Routing request to handler for operation code: {}", operationCode);
@@ -131,11 +105,11 @@ public class KmipRequestHandler {
 
         } catch (KmipException e) {
             log.error("Error handling operation {}: {}", operationCode, e.getMessage(), e);
-            ResultReason reason = e.getResultReason() != null ? e.getResultReason() : ResultReason.GENERAL_FAILURE;
+            KmipResultReason reason = e.getResultReason() != null ? e.getResultReason() : KmipResultReason.GENERAL_FAILURE;
             return buildErrorResponse(e.getMessage(), protocolVersion, reason);
         } catch (Exception e) {
             log.error("Unexpected error handling operation {}: {}", operationCode, e.getMessage(), e);
-            return buildErrorResponse("Internal Server Error", protocolVersion, ResultReason.GENERAL_FAILURE);
+            return buildErrorResponse("Internal Server Error", protocolVersion, KmipResultReason.GENERAL_FAILURE);
         }
     }
 
@@ -149,7 +123,7 @@ public class KmipRequestHandler {
         // because the PyKMIP client expects only the Unique Identifier field
         if (operationCode != 0x14 && responsePayload != null && !responsePayload.getFields().containsKey(KmipTagResolver.TAG_OBJECT_TYPE)) {
             log.error("Response payload is missing required Object Type field");
-            return buildErrorResponse("Internal Error: Missing Object Type", protocolVersion, ResultReason.GENERAL_FAILURE);
+            return buildErrorResponse("Internal Error: Missing Object Type", protocolVersion, KmipResultReason.GENERAL_FAILURE);
         }
 
         KmipMessage responseMessage = new KmipMessage();
@@ -179,7 +153,7 @@ public class KmipRequestHandler {
         responseBatchItem.addField(KmipTagResolver.TAG_OPERATION, operationCode);
 
         // Result Status (Table 386) - MUST be second field
-        responseBatchItem.addField(KmipTagResolver.TAG_RESULT_STATUS, ResultStatus.SUCCESS.getCode());
+        responseBatchItem.addField(KmipTagResolver.TAG_RESULT_STATUS, KmipResultStatus.SUCCESS.getCode());
 
         // Result Message - Add a success message for the client
         // This is CRITICAL for PyKMIP client compatibility - it expects this field
@@ -201,8 +175,8 @@ public class KmipRequestHandler {
         return responseMessage;
     }
 
-    private KmipMessage buildErrorResponse(String errorMessage, KmipMessage protocolVersion, ResultReason reason) {
-        log.warn("Building ERROR response: Status={}, Reason={}, Message='{}'", ResultStatus.OPERATION_FAILED, reason, errorMessage);
+    private KmipMessage buildErrorResponse(String errorMessage, KmipMessage protocolVersion, KmipResultReason reason) {
+        log.warn("Building ERROR response: Status={}, Reason={}, Message='{}'", KmipResultStatus.OPERATION_FAILED, reason, errorMessage);
         KmipMessage responseMessage = new KmipMessage();
 
         // 1. Build Response Header (Best effort)
@@ -223,7 +197,7 @@ public class KmipRequestHandler {
         responseBatchItem.addField(KmipTagResolver.TAG_OPERATION, 1); // Use CREATE (1) as default
 
         // Result Status MUST be second field
-        responseBatchItem.addField(KmipTagResolver.TAG_RESULT_STATUS, ResultStatus.OPERATION_FAILED.getCode());
+        responseBatchItem.addField(KmipTagResolver.TAG_RESULT_STATUS, KmipResultStatus.OPERATION_FAILED.getCode());
 
         // Result Reason MUST be third field if present
         if (reason != null) {

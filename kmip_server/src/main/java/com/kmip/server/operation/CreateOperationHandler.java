@@ -5,6 +5,9 @@ import com.kmip.server.protocol.message.KmipMessage;
 import com.kmip.server.protocol.tag.KmipTagResolver;
 import com.kmip.server.protocol.tag.TagValueUtil;
 import com.kmip.server.service.KeyManagementService;
+import com.kmip.server.core.enums.KmipOperationType;
+import com.kmip.server.core.enums.KmipObjectType;
+import com.kmip.server.core.enums.KmipCryptographicAlgorithm;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -18,8 +21,8 @@ import java.util.Optional;
 public class CreateOperationHandler implements OperationHandler {
 
     private static final Logger log = LoggerFactory.getLogger(CreateOperationHandler.class);
-    private static final int OPERATION_CREATE = 1;
-    private static final int OBJECT_TYPE_SYMMETRIC_KEY = 2;
+    private static final int OPERATION_CREATE = KmipOperationType.CREATE.getCode();
+    private static final int OBJECT_TYPE_SYMMETRIC_KEY = KmipObjectType.SYMMETRIC_KEY.getCode();
 
     @Autowired
     @org.springframework.beans.factory.annotation.Qualifier("inMemoryKms")
@@ -42,7 +45,7 @@ public class CreateOperationHandler implements OperationHandler {
         }
 
         // 2. Extract Attributes from Template-Attribute (if present)
-        Integer algoEnum = 3; // Default to AES (Enum 3)
+        Integer algoEnum = KmipCryptographicAlgorithm.AES.getCode(); // Default to AES
         Integer keyLength = 256; // Default to 256 bits
         Integer usageMask = 0; // Default to no usage mask
 
@@ -101,12 +104,18 @@ public class CreateOperationHandler implements OperationHandler {
         return OPERATION_CREATE;
     }
 
-    // Simple mapping - enhance later based on KMIP spec Table 405
+    // Algorithm mapping using KMIP enum - based on KMIP spec Table 406
     private String mapKmipAlgorithmToJca(int kmipAlgorithmEnum) throws KmipException {
-        switch (kmipAlgorithmEnum) {
-            case 3: return "AES";
-            // TODO: Add other mappings (DES3, Blowfish, etc.)
-            default: throw new KmipException("Unsupported KMIP Cryptographic Algorithm Enum: " + kmipAlgorithmEnum);
+        KmipCryptographicAlgorithm algorithm = KmipCryptographicAlgorithm.fromCode(kmipAlgorithmEnum);
+
+        if (algorithm == null || algorithm == KmipCryptographicAlgorithm.UNKNOWN) {
+            throw new KmipException("Unsupported KMIP Cryptographic Algorithm Enum: " + kmipAlgorithmEnum);
         }
+
+        if (!algorithm.isSupported()) {
+            throw new KmipException("KMIP Algorithm " + algorithm.getDisplayName() + " is not supported by this server");
+        }
+
+        return algorithm.getJcaName();
     }
 }
