@@ -285,15 +285,22 @@ Our KMIP Server Architecture
 - **Scalable Architecture**: Handles millions of keys
 - **Security First**: Bank-grade security controls
 
-#### **3. Business Impact**
+#### **3. Business Impact - Replacing CryptSoft's Licensed Solution**
 ```
-Before KMIP Implementation    After KMIP Implementation
-├── 15 different key systems ├── 1 unified KMIP system
-├── Manual key rotation      ├── Automated key lifecycle
-├── 3-day integration time   ├── 3-hour integration time
-├── $2M annual licensing     ├── $200K annual maintenance
-└── Compliance challenges    └── Automated compliance
+Current State (CryptSoft)     Our KMIP Implementation
+├── Licensed KMIP server     ├── Open-source KMIP server
+├── $800K annual licensing   ├── $150K annual maintenance
+├── Vendor dependency        ├── Full control & ownership
+├── Limited customization    ├── Complete customization
+├── Vendor upgrade cycles    ├── Our development timeline
+└── Support ticket delays    └── Internal expertise
 ```
+
+#### **4. Strategic Transformation**
+- **From Renter to Owner**: Transitioning from licensed to owned technology
+- **Cost Reduction**: $650K annual savings from CryptSoft replacement
+- **Vendor Independence**: No longer dependent on CryptSoft's roadmap
+- **Innovation Control**: Can implement features as business needs arise
 
 ### Unique Competitive Advantages
 
@@ -302,23 +309,28 @@ Before KMIP Implementation    After KMIP Implementation
 - **MongoDB Integration**: First successful KMIP-MongoDB deployment
 - **Open Source Foundation**: No vendor dependencies
 
-#### **2. Cost Leadership**
+#### **2. Cost Leadership - CryptSoft Replacement Analysis**
 ```
-Traditional KMS Costs (Annual)
-├── Vendor Licensing: $2,000,000
-├── Integration Fees: $500,000
-├── Maintenance: $300,000
-├── Compliance: $200,000
-└── Total: $3,000,000
+Current CryptSoft Costs (Annual)
+├── KMIP Server Licensing: $800,000
+├── Support & Maintenance: $200,000
+├── Integration Consulting: $150,000
+├── Compliance Reporting: $100,000
+└── Total Current Cost: $1,250,000
 
 Our KMIP Solution (Annual)
-├── Development: $200,000 (one-time)
+├── Development (amortized): $100,000
 ├── Infrastructure: $100,000
-├── Maintenance: $50,000
+├── Internal Maintenance: $50,000
 ├── Compliance: $0 (automated)
-└── Total: $150,000 (ongoing)
+└── Total Our Cost: $250,000
 
-Annual Savings: $2,850,000
+Annual Savings from CryptSoft: $1,000,000
+
+Additional Market Comparison:
+├── Avoided new vendor costs: $1,500,000
+├── Integration efficiency gains: $500,000
+└── Total Annual Value: $3,000,000
 ```
 
 #### **3. Strategic Positioning**

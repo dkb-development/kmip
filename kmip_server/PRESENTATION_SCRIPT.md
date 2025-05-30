@@ -151,7 +151,7 @@
 
 **"Six months ago, we made a decision that has already transformed our security infrastructure and saved us millions of dollars.**
 
-**We built our own enterprise-grade KMIP server. Not bought, not rented - built.**
+**We decided to replace our expensive CryptSoft licensed KMIP server with our own enterprise-grade implementation. Not just upgrade, not just renew - replace with something we own and control.**
 
 **And the results speak for themselves:**
 
@@ -161,15 +161,17 @@
 
 **Second, we're handling over 10,000 key operations per second with 99.9% uptime. That's enterprise-grade performance.**
 
-**Third, and this is the big one - we're saving $2.85 million annually compared to commercial solutions.**
+**Third, and this is the big one - we're saving over $1 million annually just from replacing CryptSoft, plus avoiding millions more in alternative vendor costs.**
 
 **Let me break that down for you:**
 
-**Commercial KMS licensing: $2 million per year. Our solution: $150,000 per year in operational costs.**
+**CryptSoft licensing and support: $1.25 million per year. Our solution: $250,000 per year in total operational costs.**
 
-**Integration costs: Commercial solutions average $500,000 per system integration. Our KMIP solution: $50,000 per integration.**
+**That's $1 million in direct savings from the CryptSoft replacement alone.**
 
-**Maintenance and support: Commercial solutions require $300,000 annually. Our solution: $50,000 annually.**
+**But if we had to buy a new commercial solution instead, we'd be looking at $2-3 million annually. So our total value creation is actually $3 million per year.**
+
+**Integration costs: CryptSoft integrations required expensive consulting and took months. Our KMIP solution: We do it ourselves in weeks.**
 
 **But the savings are just the beginning. The real value is strategic.**
 
