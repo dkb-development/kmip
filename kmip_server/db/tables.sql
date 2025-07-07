@@ -74,3 +74,25 @@ CREATE TABLE client_credentials (
     created_at TIMESTAMP NOT NULL,
     modified_at TIMESTAMP NOT NULL
 );
+
+-- For Split/Join/DeriveKey, you might add:
+CREATE TABLE object_links (
+    id UUID PRIMARY KEY,
+    source_object_id UUID NOT NULL REFERENCES managed_objects(id),
+    target_object_id UUID NOT NULL REFERENCES managed_objects(id),
+    link_type VARCHAR(50) NOT NULL, -- e.g., 'split', 'join', 'derived', 'rekey
+    created_at TIMESTAMP NOT NULL
+);
+
+-- For object groups:
+CREATE TABLE object_groups (
+    id UUID PRIMARY KEY,
+    group_name VARCHAR(100) NOT NULL,
+    description TEXT
+);
+
+CREATE TABLE object_group_membership (
+    group_id UUID NOT NULL REFERENCES object_groups(id),
+    object_id UUID NOT NULL REFERENCES managed_objects(id),
+    PRIMARY KEY (group_id, object_id)
+);
